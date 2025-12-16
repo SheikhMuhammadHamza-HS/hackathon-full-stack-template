@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:sqlmodel.tiangolo.com)",
+      "WebFetch(domain:openai.github.io)",
+      "Bash(venvScriptsactivate)",
+      "Bash(pip install -e .)",
+      "Bash(cmd /c \"venv\\Scripts\\activate && pip install -e .\")"
+    ]
+  }
+}

@@ -1,8 +1,20 @@
 # Claude Code Rules
 
-This file is generated during init for the selected agent.
+## Project Overview
 
-You are an expert AI assistant specializing in Spec-Driven Development (SDD). Your primary goal is to work with the architext to build products.
+**Hackathon Todo Application** - A full-stack, spec-driven todo management system with AI-powered chat capabilities.
+
+**Tech Stack:**
+- **Backend**: Python (FastAPI + SQLModel + Alembic)
+- **Frontend**: Next.js 16+ (App Router) + React 19 + TypeScript
+- **Database**: Neon Serverless PostgreSQL
+- **AI**: OpenAI Agents SDK + MCP (Model Context Protocol)
+- **Deployment**: Docker + Kubernetes
+- **Auth**: JWT-based authentication
+
+**Development Methodology:** Spec-Driven Development (SDD) with PHR tracking and ADR documentation.
+
+You are an expert AI assistant specializing in Spec-Driven Development. Your primary goal is to work with the architecture to build products following established patterns and blueprints.
 
 ## Task context
 
@@ -206,5 +218,65 @@ Wait for consent; never auto-create ADRs. Group related decisions (stacks, authe
 - `history/adr/` — Architecture Decision Records
 - `.specify/` — SpecKit Plus templates and scripts
 
+## Agent Skills & Blueprints
+
+This project uses **Agent Skills** as cloud-native blueprints. Skills provide production-ready patterns and best practices that agents automatically reference when working.
+
+**Available Skills:**
+- `.claude/skills/docker/` - Container orchestration patterns
+- `.claude/skills/fastapi/` - Python API framework patterns
+- `.claude/skills/postgresql-sqlmodel/` - Database and ORM patterns
+- `.claude/skills/nextjs-react/` - Frontend framework patterns
+- `.claude/skills/openai-agents-sdk/` - AI agent integration patterns
+- `.claude/skills/mcp/` - Model Context Protocol integration
+
+**How Skills Work:**
+1. Agent detects relevant task (e.g., "create Dockerfile")
+2. Automatically loads matching skill (e.g., docker skill)
+3. Follows blueprints and best practices from skill
+4. Generates production-ready, consistent code
+
+## Specialized Agents
+
+This project has specialized agents for different domains:
+
+- **neon-database-agent** - Database schema, migrations, query optimization
+- **backend-implementer** - FastAPI endpoints, server logic, validation
+- **todo-chat-agent** - Conversational AI interface with MCP tools
+- **api-contract-designer** - API contract design and documentation
+- **ui-designer** - React/Next.js UI components and layouts
+
+Use these agents by invoking them with the Task tool when their expertise is needed.
+
 ## Code Standards
-See `.specify/memory/constitution.md` for code quality, testing, performance, security, and architecture principles.
+
+### General Principles
+- **Spec-Driven**: All code must trace back to specification requirements
+- **Security First**: Never hardcode secrets, always validate inputs, enforce user isolation
+- **Small Changes**: Prefer smallest viable diff, no unrelated refactoring
+- **Test Coverage**: All features must be testable with clear acceptance criteria
+- **Error Handling**: Explicit error paths, user-friendly messages, proper logging
+
+### Backend Standards (Python/FastAPI)
+- Use SQLModel for database models
+- Alembic for all schema changes
+- User-scoped queries (MUST filter by user_id)
+- Pydantic models for validation
+- Type hints required
+- Async/await for I/O operations
+
+### Frontend Standards (Next.js/React)
+- Server Components by default
+- Client Components only when needed (state, events, browser APIs)
+- TypeScript strict mode
+- Server Actions for mutations
+- Proper loading/error states
+
+### Database Standards
+- All queries MUST be user-scoped for security
+- Index frequently queried columns
+- Use connection pooling
+- Migrations must be reversible
+- Document schema changes
+
+See `.specify/memory/constitution.md` for additional code quality, testing, performance, security, and architecture principles.
