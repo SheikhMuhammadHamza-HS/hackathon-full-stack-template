@@ -280,3 +280,10 @@ Use these agents by invoking them with the Task tool when their expertise is nee
 - Document schema changes
 
 See `.specify/memory/constitution.md` for additional code quality, testing, performance, security, and architecture principles.
+
+## Active Technologies
+- Python 3.13+ (backend), TypeScript/Node.js 20+ (frontend) (001-user-auth)
+- Neon PostgreSQL (serverless, cloud-hosted) (001-user-auth)
+
+## Recent Changes
+- 001-user-auth: Added Python 3.13+ (backend), TypeScript/Node.js 20+ (frontend)

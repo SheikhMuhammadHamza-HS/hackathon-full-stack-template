@@ -35,3 +35,22 @@ build/
 Thumbs.db
 *.tmp
 *.swp
+
+# Environment variables (Phase II - Full-stack)
+.env
+.env.local
+.env*.local
+*.env
+
+# Node.js / Frontend
+node_modules/
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# Backend
+backend/.env
+backend/__pycache__/
+backend/alembic/versions/*.pyc
