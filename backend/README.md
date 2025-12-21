@@ -69,6 +69,17 @@ ALLOWED_ORIGINS=http://localhost:3000
 DATABASE_ECHO=false
 ```
 
+**OAuth Variables (Optional - for Google/GitHub authentication):**
+```env
+GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+OAUTH_REDIRECT_URI=http://localhost:8000/api/auth
+```
+
+> **Note**: OAuth is optional. If not configured, users can still signup/signin with email/password. See [OAuth Setup Guide](docs/oauth-setup.md) for detailed instructions on obtaining credentials.
+
 ### 3. Run Database Migrations
 
 ```bash
@@ -96,6 +107,10 @@ DATABASE_ECHO=false
 - `POST /api/auth/signup` - Create new user account
 - `POST /api/auth/signin` - Sign in with email/password
 - `POST /api/auth/signout` - Sign out (client-side token removal)
+- `GET /api/auth/google/login` - Initiate Google OAuth flow
+- `GET /api/auth/google/callback` - Handle Google OAuth callback
+- `GET /api/auth/github/login` - Initiate GitHub OAuth flow
+- `GET /api/auth/github/callback` - Handle GitHub OAuth callback
 
 ### Tasks (Protected - Requires JWT)
 - `GET /api/{user_id}/tasks` - List all user tasks

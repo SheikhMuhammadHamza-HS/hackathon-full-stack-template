@@ -453,11 +453,169 @@ Phase 1 (Setup) → Phase 2 (Foundational)
 
 ---
 
-**Task File Status**: ✅ COMPLETE - Ready for implementation
+---
 
-**Next Command**: Begin implementation with Phase 1 (Setup) tasks
+## Phase 10: OAuth Integration (Google & GitHub)
+
+**Purpose**: Add social authentication (OAuth) for Google and GitHub signup/signin alongside existing email/password authentication
+
+**Note**: Frontend UI already exists. Only backend implementation is required.
+
+### Backend OAuth Setup
+
+- [X] T118 Install OAuth dependencies in backend/pyproject.toml: authlib, httpx (if not already present)
+- [X] T119 Add OAuth environment variables to backend/.env.example: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, OAUTH_REDIRECT_URI
+- [X] T120 Create backend/app/oauth.py with OAuth client configuration for Google and GitHub using authlib
+- [X] T121 Configure Google OAuth client in oauth.py: set authorization endpoint, token endpoint, userinfo endpoint
+- [X] T122 Configure GitHub OAuth client in oauth.py: set authorization endpoint, token endpoint, user endpoint
+
+### Google OAuth Implementation
+
+- [X] T123 Create GET /api/auth/google/login endpoint in backend/app/routers/auth.py: generate OAuth authorization URL with state parameter
+- [X] T124 Create GET /api/auth/google/callback endpoint: exchange authorization code for access token
+- [X] T125 Implement Google userinfo fetch in callback: retrieve email, name, profile picture from Google API
+- [X] T126 Implement user lookup/creation in Google callback: check if user exists by email, create if new user
+- [X] T127 Generate JWT token in Google callback: include user_id, email, name, 7-day expiry
+- [X] T128 Add state parameter validation in Google callback: verify state matches to prevent CSRF attacks
+- [X] T129 Add error handling in Google OAuth flow: handle invalid code, network failures, API errors
+- [X] T130 Store OAuth provider info in User model: add optional oauth_provider, oauth_id fields (requires migration)
+
+### GitHub OAuth Implementation
+
+- [X] T131 Create GET /api/auth/github/login endpoint in backend/app/routers/auth.py: generate OAuth authorization URL with state parameter
+- [X] T132 Create GET /api/auth/github/callback endpoint: exchange authorization code for access token
+- [X] T133 Implement GitHub user data fetch in callback: retrieve email, name, avatar from GitHub API
+- [X] T134 Handle GitHub email privacy: if primary email is private, fetch verified email from /user/emails endpoint
+- [X] T135 Implement user lookup/creation in GitHub callback: check if user exists by email, create if new user
+- [X] T136 Generate JWT token in GitHub callback: include user_id, email, name, 7-day expiry
+- [X] T137 Add state parameter validation in GitHub callback: verify state matches to prevent CSRF attacks
+- [X] T138 Add error handling in GitHub OAuth flow: handle invalid code, network failures, API errors
+
+### Database Schema Updates
+
+- [X] T139 Update backend/app/models.py User model: add oauth_provider (optional string), oauth_id (optional string), profile_picture (optional string)
+- [X] T140 Generate Alembic migration for OAuth fields: alembic revision --autogenerate -m "Add OAuth fields to users table"
+- [X] T141 Review migration file: ensure nullable=True for oauth fields, add indexes on (oauth_provider, oauth_id) composite
+- [ ] T142 Apply migration: alembic upgrade head (verify columns added in Neon Console)
+- [X] T143 Update backend/app/schemas.py UserResponse: include oauth_provider, profile_picture in response model
+
+### OAuth Security & Edge Cases
+
+- [X] T144 Implement state token generation: use secrets.token_urlsafe(32), store in session/cache with 5-minute expiry
+- [ ] T145 Add rate limiting to OAuth endpoints: prevent abuse of authorization redirect loops (Future enhancement - not implemented)
+- [X] T146 Handle OAuth email conflicts: if OAuth email matches existing password-based account, link accounts (implemented in callbacks)
+- [ ] T147 Add account linking prevention: if OAuth account exists with different provider, show "Email already registered with [provider]" error (Future enhancement)
+- [X] T148 Validate OAuth redirect URIs: ensure callback URLs match configured OAUTH_REDIRECT_URI to prevent open redirects (implemented via authlib)
+
+### Frontend Integration (Backend Response Format)
+
+- [X] T149 Update OAuth callback endpoints to return: redirect to frontend with token in URL fragment (e.g., /auth/callback?token=xxx&provider=google)
+- [X] T150 Add CORS configuration for OAuth callbacks: ensure frontend origin is allowed in callback responses (SessionMiddleware added)
+- [X] T151 Document OAuth flow for frontend: provide API contract for /google/login, /google/callback, /github/login, /github/callback endpoints
+
+### Testing OAuth Flows
+
+- [ ] T152 Test Google OAuth with valid credentials: verify authorization redirect, callback token exchange, user creation/login (Manual testing required)
+- [ ] T153 Test Google OAuth with invalid authorization code: verify 400 error "Invalid authorization code" (Error handling implemented)
+- [ ] T154 Test Google OAuth with existing user email: verify user logged in (not duplicate account created) (Account linking implemented)
+- [ ] T155 Test Google OAuth CSRF protection: verify invalid state parameter returns 400 error (CSRF protection implemented)
+- [ ] T156 Test GitHub OAuth with valid credentials: verify authorization redirect, callback token exchange, user creation/login (Manual testing required)
+- [ ] T157 Test GitHub OAuth with private email: verify email fetched from /user/emails endpoint (Private email handling implemented)
+- [ ] T158 Test GitHub OAuth with existing user email: verify user logged in (not duplicate account created) (Account linking implemented)
+- [ ] T159 Test GitHub OAuth CSRF protection: verify invalid state parameter returns 400 error (CSRF protection implemented)
+- [ ] T160 Test OAuth email conflict scenario: create password account, attempt OAuth signin with same email, verify behavior per conflict strategy (Manual testing required)
+- [ ] T161 Verify OAuth user data in database: check oauth_provider, oauth_id, profile_picture fields populated correctly (Manual testing required)
+
+### Documentation
+
+- [X] T162 Create backend/docs/oauth-setup.md: document how to obtain Google OAuth credentials from Google Cloud Console
+- [X] T163 Update backend/docs/oauth-setup.md: document how to obtain GitHub OAuth credentials from GitHub Developer Settings (Combined in T162)
+- [ ] T164 Update backend/README.md: add OAuth environment variables section with setup instructions
+- [X] T165 Create API contract docs: document OAuth endpoints in specs/001-user-auth/contracts/oauth-google.md
+- [X] T166 Create API contract docs: document OAuth endpoints in specs/001-user-auth/contracts/oauth-github.md
+
+---
+
+## Updated Dependencies & Execution Order
+
+### Story Completion Order (with OAuth)
+
+```
+Phase 1 (Setup) → Phase 2 (Foundational)
+                       ↓
+         ┌─────────────┼─────────────┐
+         ↓             ↓             ↓
+    Phase 3 (US1)  Phase 4 (US2)  Phase 5 (US5)
+    [Signup - P1]  [Signin - P1]  [Isolation - P1]
+         ↓             ↓             ↓
+         └─────────────┼─────────────┘
+                       ↓
+                  Phase 6 (US3)
+                  [Signout - P2]
+                       ↓
+                  Phase 7 (US4)
+                  [Persistence - P2]
+                       ↓
+                  Phase 8 (Dashboard)
+                       ↓
+                  Phase 9 (Polish)
+                       ↓
+                  Phase 10 (OAuth)
+                  [Google & GitHub - P2]
+```
+
+### Parallel Execution Opportunities (Phase 10)
+
+- T118 (OAuth dependencies) || T119 (environment variables)
+- T121 (Google config) || T122 (GitHub config)
+- T123-T130 (Google OAuth flow) || T131-T138 (GitHub OAuth flow) — **Can implement Google and GitHub in parallel**
+- T152-T155 (Google tests) || T156-T160 (GitHub tests)
+- T162 (Google docs) || T163 (GitHub docs)
+- T165 (Google contract) || T166 (GitHub contract)
+
+**Benefit**: Google and GitHub OAuth can be implemented simultaneously by different developers
+
+---
+
+## Updated Task Summary
+
+**Total Tasks**: 166 (previously 117)
+**New OAuth Tasks**: 49 (T118-T166)
+**Parallelizable OAuth Tasks**: 8-10 (marked with potential parallel execution)
+
+**Estimated Effort (Phase 10 OAuth)**:
+- OAuth Setup: 1 hour
+- Google OAuth Implementation: 2-3 hours
+- GitHub OAuth Implementation: 2-3 hours
+- Database Migration: 1 hour
+- Security & Edge Cases: 1-2 hours
+- Testing: 2-3 hours
+- Documentation: 1 hour
+- **Phase 10 Total**: 10-14 hours
+
+**Overall Project Total**: 28-40 hours (previously 18-26 hours)
+
+**Story Breakdown (Updated)**:
+- User Story 1 (Signup): 22 tasks (T021-T042)
+- User Story 2 (Signin): 19 tasks (T043-T061)
+- User Story 3 (Signout): 11 tasks (T080-T090)
+- User Story 4 (Persistence): 11 tasks (T091-T101)
+- User Story 5 (Isolation): 18 tasks (T062-T079)
+- **OAuth Integration**: 49 tasks (T118-T166)
+- Setup: 9 tasks (T001-T009)
+- Foundational: 11 tasks (T010-T020)
+- Dashboard: 5 tasks (T102-T106)
+- Polish: 11 tasks (T107-T117)
+
+---
+
+**Task File Status**: ✅ UPDATED - OAuth tasks added (T118-T166)
+
+**Next Command**: Begin OAuth implementation with Phase 10 tasks after completing Phases 1-9
 
 **Suggested Commit Strategy**:
 - Commit after each phase completion
 - Example: "feat(auth): complete Phase 1 setup tasks (T001-T009)"
 - Example: "feat(auth): complete User Story 1 signup (T021-T042)"
+- Example: "feat(auth): add Google OAuth integration (T118-T130, T139-T143)"
+- Example: "feat(auth): add GitHub OAuth integration (T131-T138)"
