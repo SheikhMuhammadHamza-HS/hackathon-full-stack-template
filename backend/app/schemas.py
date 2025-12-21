@@ -131,3 +131,63 @@ class TaskResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Chat Schemas (Phase III)
+from typing import List, Any
+
+
+class ChatRequest(BaseModel):
+    """Request schema for chat endpoint."""
+    message: str = Field(..., min_length=1, max_length=10000)
+    conversation_id: Optional[int] = None
+
+    @field_validator('message')
+    @classmethod
+    def validate_message(cls, v: str) -> str:
+        """Trim whitespace and reject empty messages."""
+        trimmed = v.strip()
+        if not trimmed:
+            raise ValueError('Message cannot be empty or whitespace-only')
+        return trimmed
+
+
+class ToolCallInfo(BaseModel):
+    """Information about a tool call made by the agent."""
+    tool: str
+    parameters: dict
+    result: dict
+
+
+class ChatResponse(BaseModel):
+    """Response schema for chat endpoint."""
+    reply: str
+    conversation_id: int
+    tool_calls: List[ToolCallInfo] = []
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ConversationResponse(BaseModel):
+    """Response schema for conversation data."""
+    id: int
+    user_id: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class MessageHistoryResponse(BaseModel):
+    """Response schema for message history."""
+    id: int
+    role: str
+    content: str
+    tool_calls: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
