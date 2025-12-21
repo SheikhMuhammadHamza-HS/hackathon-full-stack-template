@@ -10,6 +10,7 @@ class User(SQLModel, table=True):
 
     This model is used for user data storage and Alembic migrations.
     Passwords are hashed using bcrypt in the authentication endpoints.
+    OAuth fields support social authentication (Google, GitHub).
     """
     __tablename__ = "users"
 
@@ -19,7 +20,13 @@ class User(SQLModel, table=True):
     )
     email: str = Field(unique=True, index=True, min_length=1, max_length=254)
     name: str = Field(min_length=1, max_length=100)
-    password_hash: str = Field(min_length=1, max_length=255)  # Required field, hashed with bcrypt
+    password_hash: Optional[str] = Field(default=None, max_length=255)  # Optional for OAuth users
+
+    # OAuth fields
+    oauth_provider: Optional[str] = Field(default=None, max_length=50, index=True)  # 'google', 'github', etc.
+    oauth_id: Optional[str] = Field(default=None, max_length=255)  # Provider's unique user ID
+    profile_picture: Optional[str] = Field(default=None, max_length=500)  # Profile picture URL
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

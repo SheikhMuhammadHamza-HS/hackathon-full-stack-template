@@ -59,6 +59,8 @@ class UserResponse(BaseModel):
     id: str
     email: str
     name: str
+    oauth_provider: Optional[str] = None
+    profile_picture: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

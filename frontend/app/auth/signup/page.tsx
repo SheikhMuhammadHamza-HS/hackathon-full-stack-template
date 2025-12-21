@@ -173,6 +173,22 @@ export default function SignupPage() {
     }
   };
 
+  /**
+   * Handle Google OAuth login
+   */
+  const handleGoogleLogin = () => {
+    // Redirect to backend Google OAuth endpoint
+    window.location.href = 'http://localhost:8000/api/auth/google/login';
+  };
+
+  /**
+   * Handle GitHub OAuth login
+   */
+  const handleGitHubLogin = () => {
+    // Redirect to backend GitHub OAuth endpoint
+    window.location.href = 'http://localhost:8000/api/auth/github/login';
+  };
+
   return (
     <AuthForm
       title="Create your account"
@@ -294,20 +310,7 @@ export default function SignupPage() {
       {/* Terms and Privacy */}
       <div className="mt-6 text-xs text-center text-gray-500 dark:text-gray-400">
         <p>
-          By signing up, you agree to our{' '}
-          <Link
-            href="/terms"
-            className="underline hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-          >
-            Terms of Service
-          </Link>{' '}
-          and{' '}
-          <Link
-            href="/privacy"
-            className="underline hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-          >
-            Privacy Policy
-          </Link>
+          By signing up, you agree to our Terms of Service and Privacy Policy
         </p>
       </div>
 
@@ -327,6 +330,7 @@ export default function SignupPage() {
         <div className="mt-6 grid grid-cols-2 gap-3">
           <button
             type="button"
+            onClick={handleGoogleLogin}
             className="
               w-full
               inline-flex
@@ -366,6 +370,7 @@ export default function SignupPage() {
 
           <button
             type="button"
+            onClick={handleGitHubLogin}
             className="
               w-full
               inline-flex
