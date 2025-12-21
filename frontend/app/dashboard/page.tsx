@@ -322,6 +322,47 @@ export default function DashboardPage() {
 
           {/* Right Side Actions */}
           <div className="flex items-center gap-3">
+            {/* AI Chat Button */}
+            <button
+              onClick={() => router.push('/chat')}
+              className="
+                px-4
+                py-2
+                text-sm
+                font-medium
+                text-cyan-300
+                hover:text-cyan-200
+                border
+                border-cyan-500/30
+                hover:bg-cyan-500/10
+                rounded-lg
+                transition-all
+                duration-200
+                focus:outline-none
+                focus:ring-2
+                focus:ring-cyan-500/50
+                flex
+                items-center
+                gap-2
+              "
+              aria-label="Open AI chat assistant"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+                />
+              </svg>
+              <span className="hidden sm:inline">AI Chat</span>
+            </button>
+
             {/* Admin Panel Link - Only show for admin users */}
             {user?.email === 'sheikhmhamza37@gmail.com' && (
               <button

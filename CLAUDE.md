@@ -284,6 +284,8 @@ See `.specify/memory/constitution.md` for additional code quality, testing, perf
 ## Active Technologies
 - Python 3.13+ (backend), TypeScript/Node.js 20+ (frontend) (001-user-auth)
 - Neon PostgreSQL (serverless, cloud-hosted) (001-user-auth)
+- Python 3.13+ (backend), TypeScript/Node.js 20+ (frontend) + OpenAI Agents SDK, Official MCP SDK, ChatKit React, FastAPI, SQLModel, Next.js 16, React 19 (002-ai-chatbot)
+- Neon Serverless PostgreSQL (extend with conversations and messages tables) (002-ai-chatbot)
 
 ## Recent Changes
 - 001-user-auth: Added Python 3.13+ (backend), TypeScript/Node.js 20+ (frontend)

@@ -1,7 +1,12 @@
-"""SQLModel database models for authentication system."""
-from sqlmodel import SQLModel, Field
+"""SQLModel database models for authentication system and AI chatbot.
+
+Phase II: User and Task models for authentication and todo management.
+Phase III: Conversation and Message models for AI chatbot feature.
+"""
+from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy import Column, Text
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 import uuid
 
 
@@ -46,3 +51,55 @@ class Task(SQLModel, table=True):
     completed: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class Conversation(SQLModel, table=True):
+    """Conversation model representing a chat session between user and AI assistant.
+
+    Phase III: Supports stateless conversation architecture for AI chatbot.
+    Groups related messages together for context and organization.
+    All queries MUST filter by authenticated user_id for security.
+
+    Relationships:
+        - One user has many conversations (1:N)
+        - One conversation has many messages (1:N)
+    """
+    __tablename__ = "conversations"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: str = Field(foreign_key="users.id", index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationships
+    messages: List["Message"] = Relationship(back_populates="conversation")
+
+
+class Message(SQLModel, table=True):
+    """Message model representing a single message in a conversation.
+
+    Phase III: Stores individual messages sent by user or AI assistant.
+    Messages are append-only (immutable once created) for audit trail.
+    All queries MUST filter by authenticated user_id for security.
+
+    Attributes:
+        role: Must be 'user' or 'assistant' (enforced by CHECK constraint)
+        content: Message text content (stored as TEXT for large messages)
+        tool_calls: JSON string containing tool execution metadata (assistant only)
+
+    Relationships:
+        - Many messages belong to one conversation (N:1)
+        - Messages also reference user_id for efficient user isolation queries
+    """
+    __tablename__ = "messages"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: str = Field(foreign_key="users.id", index=True)
+    conversation_id: int = Field(foreign_key="conversations.id", index=True)
+    role: str = Field(max_length=20)  # 'user' or 'assistant'
+    content: str = Field(sa_column=Column(Text))
+    tool_calls: Optional[str] = Field(default=None, sa_column=Column(Text))  # JSON string
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+    # Relationships
+    conversation: Optional[Conversation] = Relationship(back_populates="messages")

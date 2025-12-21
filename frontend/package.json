@@ -9,7 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@openai/chatkit-react": "^1.4.0",
     "better-auth": "^1.4.7",
+    "clsx": "^2.1.1",
     "lucide-react": "^0.562.0",
     "next": "16.0.10",
     "next-themes": "^0.4.6",

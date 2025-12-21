@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from app.database import get_session
-from app.models import User, Task
+from app.models import User, Task, Conversation, Message
 from app.auth import verify_jwt
 from app.config import ADMIN_EMAILS
 from app.schemas import MessageResponse
@@ -116,7 +116,17 @@ async def delete_user(
                 detail="Cannot delete your own admin account"
             )
 
-        # Delete user's tasks first (due to foreign key constraint)
+        # Delete user's messages first (due to foreign key constraint)
+        await session.execute(
+            delete(Message).where(Message.user_id == user_id)
+        )
+
+        # Delete user's conversations
+        await session.execute(
+            delete(Conversation).where(Conversation.user_id == user_id)
+        )
+
+        # Delete user's tasks
         await session.execute(
             delete(Task).where(Task.user_id == user_id)
         )
@@ -126,7 +136,7 @@ async def delete_user(
         await session.commit()
 
         return MessageResponse(
-            message=f"User {user.email} and all their tasks deleted successfully"
+            message=f"User {user.email} and all their data deleted successfully"
         )
 
     except HTTPException:
