@@ -21,8 +21,8 @@ from app.auth import verify_jwt
 from app.database import get_session
 from app.models import Conversation, Message
 from app.schemas import ChatRequest, ChatResponse, ToolCallInfo
-from app.ai.agent import create_agent, run_agent, set_context, clear_context
-from app.ai.mcp_server import get_mcp_tools, execute_mcp_tool
+# Use proper OpenAI Agents SDK (Agent, Runner, @function_tool)
+from app.ai.agent import run_agent
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -204,28 +204,18 @@ async def _process_with_agent(
         )
 
     try:
-        # Get MCP tools (Model Context Protocol) - already in OpenAI format
-        mcp_tools = get_mcp_tools()
-
-        # Create agent with user context and MCP tools
-        agent_config = create_agent(user_id=user_id, tools=mcp_tools)
-
-        # Convert conversation history to the format expected by the agent
+        # Convert conversation history to simple format
         history_for_agent = [
             {"role": msg.role, "content": msg.content}
             for msg in conversation_history
         ]
 
-        # Create MCP tool executor that uses the current session
-        async def tool_executor(tool_name: str, args: dict) -> dict:
-            return await execute_mcp_tool(tool_name, args, session)
-
-        # Run the agent
+        # Run agent using proper OpenAI Agents SDK (Agent, Runner, @function_tool)
         result = await run_agent(
-            agent_config=agent_config,
             user_message=message,
             conversation_history=history_for_agent,
-            tool_executor=tool_executor
+            session=session,
+            user_id=user_id
         )
 
         # Convert tool calls to ToolCallInfo objects
@@ -246,16 +236,11 @@ async def _process_with_agent(
         logger.error(f"Traceback: {traceback.format_exc()}")
         print(f"[AGENT ERROR] {e}")
         print(f"[TRACEBACK] {traceback.format_exc()}")
-        # Clear context on error
-        clear_context()
         return (
             "I'm sorry, I encountered an error processing your request. "
             "Please try again, or use the task buttons in the dashboard.",
             []
         )
-    finally:
-        # Always clear context after request
-        clear_context()
 
 
 @router.post("/{user_id}/chat", response_model=ChatResponse)
