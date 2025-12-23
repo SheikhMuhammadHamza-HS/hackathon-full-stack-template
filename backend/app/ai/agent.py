@@ -73,7 +73,7 @@ async def run_agent(
     agent_config: Dict[str, Any],
     user_message: str,
     conversation_history: List[Dict[str, str]],
-    tool_executor: callable
+    tool_executor: Callable
 ) -> Dict[str, Any]:
     """Run the agent with a user message and return the response.
 
