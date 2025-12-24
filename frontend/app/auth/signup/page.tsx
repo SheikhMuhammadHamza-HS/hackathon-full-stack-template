@@ -177,16 +177,18 @@ export default function SignupPage() {
    * Handle Google OAuth login
    */
   const handleGoogleLogin = () => {
-    // Redirect to backend Google OAuth endpoint
-    window.location.href = 'http://localhost:8000/api/auth/google/login';
+    // Use placeholder for Docker runtime injection, or env var for local dev
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'RUNTIME_API_URL_PLACEHOLDER';
+    window.location.href = `${apiUrl}/api/auth/google/login`;
   };
 
   /**
    * Handle GitHub OAuth login
    */
   const handleGitHubLogin = () => {
-    // Redirect to backend GitHub OAuth endpoint
-    window.location.href = 'http://localhost:8000/api/auth/github/login';
+    // Use placeholder for Docker runtime injection, or env var for local dev
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'RUNTIME_API_URL_PLACEHOLDER';
+    window.location.href = `${apiUrl}/api/auth/github/login`;
   };
 
   return (

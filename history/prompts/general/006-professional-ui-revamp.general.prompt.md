@@ -26,8 +26,7 @@ tests:
 
 ## Prompt
 
-is project ki mjhe ui achi nh lagri please is application ki ui ko best banao... professional
-(Later confirmed: "Cause" font, which was interpreted as typo/unavailable, so used Inter)
+ improve the UI of this application and make it professional.(Later confirmed: "Cause" font, which was interpreted as typo/unavailable, so used Inter)
 
 ## Response snapshot
 

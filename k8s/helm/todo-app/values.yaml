@@ -1,0 +1,66 @@
+# Default values for todo-app Helm chart
+# This is a YAML-formatted file.
+
+# Global settings
+replicaCount: 2
+
+# Name overrides
+nameOverride: ""
+fullnameOverride: ""
+
+# Backend configuration
+backend:
+  image:
+    repository: todo-backend
+    tag: "v1.0.0"
+    pullPolicy: Never
+  service:
+    type: NodePort
+    port: 8000
+    nodePort: 30800
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  probes:
+    liveness:
+      path: /health
+      initialDelaySeconds: 30
+      periodSeconds: 30
+    readiness:
+      path: /health
+      initialDelaySeconds: 15
+      periodSeconds: 10
+
+# Frontend configuration
+frontend:
+  image:
+    repository: todo-frontend
+    tag: "v1.0.1"
+    pullPolicy: Never
+  service:
+    type: LoadBalancer
+    port: 3000
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "300m"
+  env:
+    NEXT_PUBLIC_API_URL: "http://localhost:30800"
+
+# ConfigMap data (non-sensitive configuration)
+config:
+  NODE_ENV: "production"
+  LOG_LEVEL: "info"
+  ALLOWED_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000"
+  OAUTH_REDIRECT_URI: "http://localhost:30800/api/auth"
+
+# Secret reference (must be created externally before helm install)
+secrets:
+  name: todo-secrets
