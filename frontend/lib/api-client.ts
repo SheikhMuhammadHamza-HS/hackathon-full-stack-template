@@ -3,7 +3,8 @@
  * Automatically includes JWT token from localStorage in Authorization header.
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Use placeholder for Docker runtime injection, or env var for local dev
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'RUNTIME_API_URL_PLACEHOLDER';
 
 /**
  * Get JWT token from localStorage (client-side only)

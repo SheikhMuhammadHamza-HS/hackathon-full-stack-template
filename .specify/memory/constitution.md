@@ -1,17 +1,17 @@
 <!--
 Sync Impact Report:
-- Version Change: 3.0.0 → 4.0.0 (MAJOR)
-- Rationale: Fundamental deployment architecture shift from localhost to containerized Kubernetes orchestration
+- Version Change: 4.0.0 → 4.1.0 (MINOR)
+- Rationale: Enhanced Phase IV constitution with concrete examples, corrected Python version, added missing patterns
 - Modified Principles:
-  * I. "Production-Ready Web Architecture" → Expanded to include Container-Native Architecture
-  * XII. "Cloud-Native Deployment" → Completely rewritten for Kubernetes and container orchestration
-- New Principles Added:
-  * XVII. Container-First Architecture (NEW)
-  * XVIII. Declarative Infrastructure (NEW)
-  * XIX. Immutable Infrastructure (NEW)
-  * XX. Cloud-Native Patterns and 12-Factor App (NEW)
-  * XXI. Health Checks and Observability (NEW)
-- Removed Sections: None (All Phase I-III principles remain valid)
+  * XVII. Container-First Architecture → Updated Python version 3.11→3.13, added graceful shutdown example, updated image size target
+  * XIX. Immutable Infrastructure → Added graceful shutdown code example
+  * XXI. Health Checks and Observability → Added frontend health check example, added resource limits example
+- New Sections Added:
+  * Graceful shutdown pattern with Python code example
+  * Frontend health check example (Next.js API route)
+  * Resource limits example with concrete values
+  * Secret management production recommendation
+- Removed Sections: None
 - Templates Requiring Updates:
   ⚠ plan-template.md (Must reference containerization, K8s deployment, health checks)
   ⚠ spec-template.md (Must include deployment requirements, resource limits)
@@ -199,6 +199,14 @@ Every API endpoint MUST require JWT authentication. Users MUST only access their
 - Environment variables MUST be injected from Secrets/ConfigMaps at runtime
 - Container images MUST NOT contain hardcoded credentials
 
+**Production Secret Management Note**:
+For production deployments, consider enhanced secret management solutions:
+- **Sealed Secrets**: Encrypt secrets for safe Git storage (Bitnami Sealed Secrets)
+- **External Secrets Operator**: Sync secrets from external vaults (AWS Secrets Manager, HashiCorp Vault)
+- **SOPS**: Mozilla's secret encryption tool for GitOps workflows
+
+Base64 encoding is NOT encryption. Never rely on it for security.
+
 ### IX. RESTful API Design
 
 API MUST follow RESTful conventions. Phase IV ensures API remains accessible from containers with proper service networking.
@@ -288,26 +296,26 @@ All application components MUST be packaged as Docker containers. Containers pro
 **Rules**:
 - Every service MUST have a Dockerfile (backend, frontend)
 - Dockerfiles MUST use multi-stage builds (minimum 2 stages: builder + runtime)
-- Base images MUST use specific versions (python:3.11-slim, node:20-alpine, NOT :latest)
+- Base images MUST use specific versions (python:3.13-slim, node:20-alpine, NOT :latest)
 - Final stage MUST run as non-root user (create user with UID > 10000)
 - Containers MUST expose single port (8000 for backend, 3000 for frontend)
 - .dockerignore MUST exclude unnecessary files (node_modules, .git, tests)
 - Health check MUST be defined in Dockerfile (HEALTHCHECK instruction)
 - Images MUST be tagged with version (todo-backend:v1.0.0)
 - Build process MUST be documented in README
-- Images MUST be optimized (< 500MB backend, < 200MB frontend)
+- Images MUST be optimized (< 600MB backend, < 200MB frontend)
 
 **Multi-Stage Dockerfile Pattern**:
 ```dockerfile
 # Stage 1: Dependencies
-FROM python:3.11-slim AS deps
+FROM python:3.13-slim AS deps
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Stage 2: Runtime
-FROM python:3.11-slim
+FROM python:3.13-slim
 RUN useradd -m -u 10001 appuser
-COPY --from=deps /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=deps /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY app/ /app/
 USER appuser
 EXPOSE 8000
@@ -384,6 +392,25 @@ kubectl exec pod -- apt-get install curl
 # 4. Apply: kubectl apply -f deployment.yaml (rolling update)
 ```
 
+**Graceful Shutdown Pattern**:
+```python
+# backend/app/main.py
+from contextlib import asynccontextmanager
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Initialize resources
+    yield
+    # Shutdown: Clean up resources gracefully
+    await engine.dispose()  # Close all DB connections
+    print("Graceful shutdown complete")
+
+app = FastAPI(lifespan=lifespan)
+```
+
+Kubernetes sends SIGTERM before killing pods. Applications MUST handle this signal to close connections and complete in-flight requests within the terminationGracePeriodSeconds (default 30s).
+
 ### XX. Cloud-Native Patterns and 12-Factor App (NEW)
 
 Application MUST follow 12-factor app principles: codebase in Git, dependencies declared explicitly, config in environment, backing services as attached resources, build/release/run separation, stateless processes, port binding, concurrency via process model, disposability, dev/prod parity, logs to stdout, admin processes.
@@ -421,7 +448,7 @@ All services MUST implement health check endpoints. Kubernetes MUST monitor appl
 - All logs MUST go to stdout/stderr (no log files in container)
 - Log format MUST be structured (JSON preferred for parsing)
 
-**Health Check Pattern**:
+**Backend Health Check Pattern**:
 ```python
 # backend/app/main.py
 @app.get("/health")
@@ -440,6 +467,28 @@ async def readiness_check():
         raise HTTPException(503, "Database unavailable")
 ```
 
+**Frontend Health Check Pattern (Next.js)**:
+```typescript
+// frontend/app/api/health/route.ts
+export async function GET() {
+  return Response.json({ status: "ok" });
+}
+
+// frontend/app/api/ready/route.ts
+export async function GET() {
+  // Check if backend API is reachable
+  try {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/health`);
+    if (res.ok) {
+      return Response.json({ status: "ready", backend: "connected" });
+    }
+    return Response.json({ status: "not_ready" }, { status: 503 });
+  } catch {
+    return Response.json({ status: "not_ready", backend: "unreachable" }, { status: 503 });
+  }
+}
+```
+
 **Kubernetes Probe Configuration**:
 ```yaml
 livenessProbe:
@@ -455,6 +504,29 @@ readinessProbe:
   initialDelaySeconds: 5
   periodSeconds: 10
 ```
+
+**Resource Limits Pattern**:
+```yaml
+# Backend container resources
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "100m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+
+# Frontend container resources
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+  limits:
+    memory: "256Mi"
+    cpu: "300m"
+```
+
+Resource requests guarantee minimum allocation; limits cap maximum usage. Pods exceeding memory limits are OOMKilled. CPU limits cause throttling. Start conservative and adjust based on monitoring.
 
 ## Scope and Constraints
 
@@ -489,7 +561,7 @@ readinessProbe:
 - Containerization: Docker, docker-compose
 - Orchestration: Kubernetes (Minikube for local)
 - Package Management: Helm 3+
-- Base Images: python:3.11-slim, node:20-alpine
+- Base Images: python:3.13-slim, node:20-alpine
 - NO Docker Swarm, Nomad, or other orchestrators
 - NO custom container runtimes (use Docker)
 
@@ -655,4 +727,4 @@ Before marking Phase IV complete, verify:
 - [ ] All Phase I-III features work in Kubernetes
 - [ ] No secrets committed to Git (Principle VIII)
 
-**Version**: 4.0.0 | **Ratified**: 2025-12-17 | **Last Amended**: 2025-12-23
+**Version**: 4.1.0 | **Ratified**: 2025-12-17 | **Last Amended**: 2025-12-24

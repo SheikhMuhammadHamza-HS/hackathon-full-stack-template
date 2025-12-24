@@ -5,7 +5,8 @@
       "WebFetch(domain:openai.github.io)",
       "Bash(venvScriptsactivate)",
       "Bash(pip install -e .)",
-      "Bash(cmd /c \"venv\\Scripts\\activate && pip install -e .\")"
+      "Bash(cmd /c \"venv\\Scripts\\activate && pip install -e .\")",
+      "Bash(minikube image ls:*)"
     ]
   }
 }
