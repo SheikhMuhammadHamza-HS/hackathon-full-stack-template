@@ -16,6 +16,12 @@ if not DATABASE_URL:
 if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
+# Remove sslmode=require if present, as it conflicts with ssl=True in asyncpg
+if "?sslmode=require" in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("?sslmode=require", "")
+if "&sslmode=require" in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("&sslmode=require", "")
+
 DATABASE_ECHO = os.getenv("DATABASE_ECHO", "false").lower() == "true"
 
 # Create async engine with SSL support for Neon

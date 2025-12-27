@@ -536,7 +536,7 @@ export default function DashboardPage() {
 
           {/* Add Task Form */}
           {showAddForm && (
-            <div className="mb-8 p-6 border border-white/20 rounded-xl bg-white/5 backdrop-blur-xl shadow-2xl">
+            <div className="mb-8 p-6 border border-white/20 rounded-xl bg-white/5 backdrop-blur-xl shadow-2xl max-h-[80vh] overflow-y-auto">
               <AddTaskForm
                 onSubmit={handleCreateTask}
                 onCancel={() => setShowAddForm(false)}

@@ -16,6 +16,8 @@ spec:
       labels:
         {{- include "todo-app.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: backend
+      annotations:
+        dapr.io/enabled: "false"
     spec:
       containers:
         - name: backend

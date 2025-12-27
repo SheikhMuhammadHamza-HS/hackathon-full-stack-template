@@ -1,7 +1,8 @@
 """Pydantic schemas for request validation and response serialization."""
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
+from enum import Enum
 
 
 class SignupRequest(BaseModel):
@@ -85,11 +86,42 @@ class ErrorResponse(BaseModel):
     details: Optional[str] = None
 
 
+# Task Enums
+class TaskPriority(str, Enum):
+    """Task priority levels."""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class RecurringInterval(str, Enum):
+    """Recurring task intervals."""
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+
+
 # Task Schemas
 class TaskCreate(BaseModel):
-    """Request schema for creating a new task."""
+    """Request schema for creating a new task.
+
+    Implements: T002 - Advanced task fields validation
+    Fields:
+        - title: Required, 1-200 chars
+        - description: Optional, max 1000 chars
+        - priority: Optional, defaults to 'medium' (low, medium, high)
+        - tags: Optional, list of strings, max 10 items
+        - due_date: Optional, datetime with timezone
+        - is_recurring: Optional, defaults to False
+        - recurring_interval: Required if is_recurring=True (daily, weekly, monthly)
+    """
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(default=None, max_length=1000)
+    priority: TaskPriority = Field(default=TaskPriority.MEDIUM)
+    tags: List[str] = Field(default_factory=list, max_length=10)
+    due_date: Optional[datetime] = None
+    is_recurring: bool = Field(default=False)
+    recurring_interval: Optional[RecurringInterval] = None
 
     @field_validator('title')
     @classmethod
@@ -100,12 +132,40 @@ class TaskCreate(BaseModel):
             raise ValueError('Title cannot be empty or whitespace-only')
         return trimmed
 
+    @field_validator('tags')
+    @classmethod
+    def validate_tags(cls, v: List[str]) -> List[str]:
+        """Validate tags: max 10 items, strip whitespace, remove empty tags."""
+        if len(v) > 10:
+            raise ValueError('Maximum 10 tags allowed')
+        # Strip whitespace and filter out empty tags
+        cleaned_tags = [tag.strip() for tag in v if tag.strip()]
+        return cleaned_tags
+
+    @model_validator(mode='after')
+    def validate_recurring_interval(self):
+        """Validate recurring_interval is required if is_recurring=True."""
+        if self.is_recurring and self.recurring_interval is None:
+            raise ValueError('recurring_interval is required when is_recurring is True')
+        if not self.is_recurring and self.recurring_interval is not None:
+            raise ValueError('recurring_interval must be None when is_recurring is False')
+        return self
+
 
 class TaskUpdate(BaseModel):
-    """Request schema for updating an existing task."""
+    """Request schema for updating an existing task.
+
+    Implements: T002 - Advanced task fields validation
+    All fields are optional for partial updates.
+    """
     title: Optional[str] = Field(default=None, min_length=1, max_length=200)
     description: Optional[str] = None
     completed: Optional[bool] = None
+    priority: Optional[TaskPriority] = None
+    tags: Optional[List[str]] = Field(default=None, max_length=10)
+    due_date: Optional[datetime] = None
+    is_recurring: Optional[bool] = None
+    recurring_interval: Optional[RecurringInterval] = None
 
     @field_validator('title')
     @classmethod
@@ -118,14 +178,45 @@ class TaskUpdate(BaseModel):
             raise ValueError('Title cannot be empty or whitespace-only')
         return trimmed
 
+    @field_validator('tags')
+    @classmethod
+    def validate_tags(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        """Validate tags: max 10 items, strip whitespace, remove empty tags."""
+        if v is None:
+            return v
+        if len(v) > 10:
+            raise ValueError('Maximum 10 tags allowed')
+        # Strip whitespace and filter out empty tags
+        cleaned_tags = [tag.strip() for tag in v if tag.strip()]
+        return cleaned_tags
+
+    @model_validator(mode='after')
+    def validate_recurring_interval(self):
+        """Validate recurring_interval is required if is_recurring=True."""
+        # Only validate if both fields are being updated
+        if self.is_recurring is not None:
+            if self.is_recurring and self.recurring_interval is None:
+                raise ValueError('recurring_interval is required when is_recurring is True')
+            if not self.is_recurring and self.recurring_interval is not None:
+                raise ValueError('recurring_interval must be None when is_recurring is False')
+        return self
+
 
 class TaskResponse(BaseModel):
-    """Response schema for task data."""
+    """Response schema for task data.
+
+    Implements: T002 - Advanced task fields in response
+    """
     id: int
     user_id: str
     title: str
     description: Optional[str]
     completed: bool
+    priority: str
+    tags: List[str]
+    due_date: Optional[datetime]
+    is_recurring: bool
+    recurring_interval: Optional[str]
     created_at: datetime
     updated_at: datetime
 
@@ -134,7 +225,6 @@ class TaskResponse(BaseModel):
 
 
 # Chat Schemas (Phase III)
-from typing import List, Any
 
 
 class ChatRequest(BaseModel):
@@ -191,3 +281,42 @@ class MessageHistoryResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Dapr State Store Schemas (Phase V - 008-dapr-state-chatbot)
+
+
+class ToolCallStateInfo(BaseModel):
+    """Tool call information stored in conversation state."""
+    tool: str
+    parameters: dict
+    result: dict
+
+
+class MessageEntry(BaseModel):
+    """Single message entry in conversation state."""
+    role: str  # 'user' or 'assistant'
+    content: str
+    timestamp: datetime
+    tool_calls: Optional[List[ToolCallStateInfo]] = None
+
+
+class ConversationState(BaseModel):
+    """Full conversation state stored in Dapr State Store.
+
+    Key pattern: chat:{user_id}:{conversation_id}
+    """
+    conversation_id: str
+    user_id: str
+    created_at: datetime
+    updated_at: datetime
+    messages: List[MessageEntry] = []
+
+    class Config:
+        from_attributes = True
+
+
+class DegradedModeWarning(BaseModel):
+    """Warning response when operating in degraded mode."""
+    warning: str = "Chat history unavailable - operating in degraded mode"
+    reason: str = "Dapr State Store is unreachable"

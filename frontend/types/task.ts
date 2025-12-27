@@ -5,6 +5,16 @@
  */
 
 /**
+ * Task priority levels
+ */
+export type TaskPriority = 'Low' | 'Medium' | 'High';
+
+/**
+ * Recurring task intervals
+ */
+export type RecurringInterval = 'Daily' | 'Weekly' | 'Monthly';
+
+/**
  * Task entity as returned from API
  */
 export interface Task {
@@ -13,6 +23,11 @@ export interface Task {
   title: string;
   description: string | null;
   completed: boolean;
+  priority: TaskPriority;
+  tags: string[] | null;
+  due_date: string | null;
+  is_recurring: boolean;
+  recurring_interval: RecurringInterval | null;
   created_at: string;
   updated_at: string;
 }
@@ -23,6 +38,11 @@ export interface Task {
 export interface CreateTaskPayload {
   title: string;
   description?: string;
+  priority?: TaskPriority;
+  tags?: string[];
+  due_date?: string;
+  is_recurring?: boolean;
+  recurring_interval?: RecurringInterval;
 }
 
 /**
@@ -32,6 +52,11 @@ export interface UpdateTaskPayload {
   title?: string;
   description?: string;
   completed?: boolean;
+  priority?: TaskPriority;
+  tags?: string[];
+  due_date?: string;
+  is_recurring?: boolean;
+  recurring_interval?: RecurringInterval;
 }
 
 /**

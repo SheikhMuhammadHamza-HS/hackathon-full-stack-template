@@ -6,7 +6,15 @@
       "Bash(venvScriptsactivate)",
       "Bash(pip install -e .)",
       "Bash(cmd /c \"venv\\Scripts\\activate && pip install -e .\")",
-      "Bash(minikube image ls:*)"
+      "Bash(minikube image ls:*)",
+      "Bash(.specify/scripts/bash/check-prerequisites.sh:*)",
+      "Bash(.specify/scripts/bash/setup-plan.sh:*)",
+      "Bash(.specify/scripts/bash/create-phr.sh:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(kubectl cluster-info)",
+      "Bash(kubectl get:*)",
+      "Bash(kubectl create:*)",
+      "Bash(kubectl logs:*)"
     ]
   }
 }

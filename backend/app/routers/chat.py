@@ -1,15 +1,22 @@
 """Chat API endpoints for AI-powered task management assistant.
 
 Implements: Spec requirement 002-ai-chatbot chat-endpoint.md
+Phase V Enhancement: Uses Dapr State Store for conversation history (008-dapr-state-chatbot)
+
 All endpoints enforce strict user isolation - conversations can only be accessed
 by their owner. Authentication via JWT is required for all operations.
 Rate limited to 20 requests per minute per user.
+
+State Management:
+- Primary: Dapr State Store (chat:{user_id}:{conversation_id})
+- Fallback: Degraded mode (chat continues without history persistence)
 """
 import json
 import logging
 import os
+import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from fastapi import APIRouter, HTTPException, Depends, status, Request
 from slowapi import Limiter
@@ -23,6 +30,14 @@ from app.models import Conversation, Message
 from app.schemas import ChatRequest, ChatResponse, ToolCallInfo
 # Use proper OpenAI Agents SDK (Agent, Runner, @function_tool)
 from app.ai.agent import run_agent
+# Phase V: Dapr State Store integration
+from app.services.state_store import (
+    DaprStateStore,
+    get_state_store,
+    create_empty_conversation_state,
+    add_message_to_state,
+    get_recent_messages
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -154,6 +169,7 @@ async def _fetch_conversation_history(
 ) -> List[Message]:
     """
     Fetch recent messages from a conversation for context.
+    LEGACY: Used for backward compatibility with database storage.
 
     Args:
         conversation_id: ID of the conversation
@@ -174,6 +190,148 @@ async def _fetch_conversation_history(
         .limit(limit)
     )
     return list(result.scalars().all())
+
+
+# ============================================================================
+# Phase V: Dapr State Store Functions (008-dapr-state-chatbot)
+# ============================================================================
+
+async def _get_or_create_dapr_conversation(
+    conversation_id: Optional[str],
+    user_id: str,
+    state_store: DaprStateStore
+) -> tuple[str, Dict[str, Any], bool]:
+    """
+    Get existing conversation state from Dapr or create a new one.
+
+    Args:
+        conversation_id: Existing conversation ID (or None to create new)
+        user_id: User ID from JWT token
+        state_store: DaprStateStore instance
+
+    Returns:
+        Tuple of (conversation_id, state_dict, is_new)
+    """
+    if conversation_id:
+        # Validate state key format and ownership
+        state_key = DaprStateStore.generate_state_key(user_id, conversation_id)
+        if not DaprStateStore.validate_state_key(state_key, user_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied - invalid conversation key"
+            )
+
+        # Try to get existing state
+        state = await state_store.get_state(state_key)
+        if state:
+            return conversation_id, state, False
+        else:
+            # State not found - create new with provided ID
+            state = create_empty_conversation_state(user_id, conversation_id)
+            return conversation_id, state, True
+    else:
+        # Generate new conversation ID
+        new_conv_id = str(uuid.uuid4())[:8]  # Short UUID for readability
+        state = create_empty_conversation_state(user_id, new_conv_id)
+        return new_conv_id, state, True
+
+
+async def _save_dapr_state(
+    user_id: str,
+    conversation_id: str,
+    state: Dict[str, Any],
+    state_store: DaprStateStore
+) -> bool:
+    """
+    Save conversation state to Dapr State Store.
+
+    Args:
+        user_id: User ID for state key
+        conversation_id: Conversation ID for state key
+        state: Conversation state to save
+        state_store: DaprStateStore instance
+
+    Returns:
+        True if save successful
+    """
+    state_key = DaprStateStore.generate_state_key(user_id, conversation_id)
+    return await state_store.save_state(state_key, state)
+
+
+def _state_messages_to_history(state: Dict[str, Any]) -> List[Dict[str, str]]:
+    """
+    Convert state messages to agent history format.
+
+    Args:
+        state: Conversation state with messages
+
+    Returns:
+        List of {role, content} dicts for agent
+    """
+    messages = get_recent_messages(state)
+    return [
+        {"role": msg["role"], "content": msg["content"]}
+        for msg in messages
+    ]
+
+
+async def _process_with_agent_v2(
+    message: str,
+    user_id: str,
+    conversation_history: List[Dict[str, str]],
+    session: AsyncSession
+) -> tuple[str, List[ToolCallInfo]]:
+    """
+    Process message with AI agent using dict-based history (Phase V).
+
+    Args:
+        message: User's input message
+        user_id: Authenticated user's ID (for context)
+        conversation_history: Previous messages as [{role, content}, ...]
+        session: Database session for tool execution
+
+    Returns:
+        tuple: (reply text, list of tool calls)
+    """
+    # Check if OpenAI API key is configured
+    if not os.getenv("OPENAI_API_KEY"):
+        logger.warning("OPENAI_API_KEY not configured - returning fallback response")
+        return (
+            "I'm currently unable to process your request because the AI service is not configured. "
+            "Please ask the administrator to set up the OPENAI_API_KEY.",
+            []
+        )
+
+    try:
+        # Run agent using proper OpenAI Agents SDK
+        result = await run_agent(
+            user_message=message,
+            conversation_history=conversation_history,
+            session=session,
+            user_id=user_id
+        )
+
+        # Convert tool calls to ToolCallInfo objects
+        tool_calls = [
+            ToolCallInfo(
+                tool=tc["tool"],
+                parameters=tc["parameters"],
+                result=tc["result"]
+            )
+            for tc in result.get("tool_calls", [])
+        ]
+
+        return result["reply"], tool_calls
+
+    except Exception as e:
+        import traceback
+        logger.error(f"Agent processing error for user {user_id}: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return (
+            "I'm sorry, I encountered an error processing your request. "
+            "Please try again, or use the task buttons in the dashboard.",
+            []
+        )
 
 
 async def _process_with_agent(
@@ -255,22 +413,25 @@ async def chat(
     Process a chat message from the user.
 
     Implements: POST /api/{user_id}/chat from chat-endpoint.md spec
+    Phase V Enhancement: Uses Dapr State Store for conversation history
 
-    Processing Flow:
+    Processing Flow (Phase V - Dapr State Store):
     1. Validate JWT and user_id match
-    2. Check rate limit (20/minute per user)
-    3. Get or create conversation
-    4. Save user message to database
-    5. Fetch conversation history for context
-    6. Process with AI agent
-    7. Save assistant response to database
-    8. Update conversation timestamp
-    9. Return response
+    2. Get or create conversation state from Dapr
+    3. Add user message to state
+    4. Process with AI agent using state history
+    5. Add assistant response to state
+    6. Save updated state to Dapr
+    7. Return response (with degraded mode warning if applicable)
+
+    Fallback (Degraded Mode):
+    - If Dapr unavailable, chat continues without history persistence
+    - Warning is logged but not exposed to user in response
 
     Security:
     - Requires valid JWT token
     - Validates user_id matches authenticated user
-    - All database queries filtered by authenticated_user
+    - State key includes user_id for isolation
     - Rate limited to 20 requests/minute per user
 
     Args:
@@ -296,61 +457,77 @@ async def chat(
     # Step 1: Validate user_id matches JWT
     await _validate_user_access(user_id, authenticated_user)
 
+    # Get Dapr State Store instance
+    state_store = get_state_store()
+    degraded_mode = False
+
     try:
-        # Step 2: Get or create conversation
-        conversation = await _get_or_create_conversation(
-            chat_request.conversation_id,
+        # Step 2: Get or create conversation state from Dapr
+        # Convert int conversation_id to string for Dapr state key
+        conv_id_str = str(chat_request.conversation_id) if chat_request.conversation_id else None
+
+        conversation_id, state, is_new = await _get_or_create_dapr_conversation(
+            conv_id_str,
             authenticated_user,
-            session
+            state_store
         )
 
-        # Step 3: Save user message
-        await _save_message(
-            conversation_id=conversation.id,
-            user_id=authenticated_user,
-            role="user",
-            content=chat_request.message,
-            tool_calls=None,
-            session=session
-        )
+        # Check if we're in degraded mode
+        if state_store.is_degraded:
+            degraded_mode = True
+            logger.warning(f"Operating in degraded mode for user {authenticated_user}")
 
-        # Step 4: Fetch conversation history for context
-        history = await _fetch_conversation_history(
-            conversation_id=conversation.id,
-            user_id=authenticated_user,
-            session=session
-        )
+        # Step 3: Add user message to state
+        state = add_message_to_state(state, "user", chat_request.message)
+
+        # Step 4: Get conversation history from state for agent
+        history_for_agent = _state_messages_to_history(state)
 
         # Step 5: Process with AI agent
-        reply, tool_calls = await _process_with_agent(
+        reply, tool_calls = await _process_with_agent_v2(
             message=chat_request.message,
             user_id=authenticated_user,
-            conversation_history=history,
+            conversation_history=history_for_agent,
             session=session
         )
 
-        # Step 6: Save assistant response
-        await _save_message(
-            conversation_id=conversation.id,
-            user_id=authenticated_user,
-            role="assistant",
-            content=reply,
-            tool_calls=tool_calls if tool_calls else None,
-            session=session
+        # Step 6: Add assistant response to state
+        tool_calls_dict = [
+            {"tool": tc.tool, "parameters": tc.parameters, "result": tc.result}
+            for tc in tool_calls
+        ] if tool_calls else None
+        state = add_message_to_state(state, "assistant", reply, tool_calls_dict)
+
+        # Step 7: Save updated state to Dapr (fire-and-forget pattern)
+        save_success = await _save_dapr_state(
+            authenticated_user,
+            conversation_id,
+            state,
+            state_store
         )
+        if not save_success:
+            logger.warning(f"Failed to save state for conversation {conversation_id}")
+            degraded_mode = True
 
-        # Step 7: Update conversation timestamp
-        conversation.updated_at = datetime.utcnow()
-        session.add(conversation)
+        # Step 8: Build and return response
+        # Note: conversation_id is now a string (Dapr state key component)
+        # For backward compatibility, we try to convert to int or use hash
+        try:
+            conv_id_response = int(conversation_id)
+        except ValueError:
+            # Use hash of string ID for backward compatibility with int response
+            conv_id_response = abs(hash(conversation_id)) % (10**9)
 
-        # Step 8: Commit transaction (handled by get_session dependency)
-        await session.flush()
-
-        # Step 9: Build and return response
         timestamp = datetime.utcnow()
+
+        # Add degraded mode warning to reply if applicable
+        final_reply = reply
+        if degraded_mode:
+            final_reply = f"[Note: Chat history may not persist due to service issues]\n\n{reply}"
+
         return ChatResponse(
-            reply=reply,
-            conversation_id=conversation.id,
+            reply=final_reply,
+            conversation_id=conv_id_response,
             tool_calls=tool_calls,
             timestamp=timestamp
         )
@@ -360,8 +537,9 @@ async def chat(
         raise
     except Exception as e:
         # Log error server-side, return generic message
+        import traceback
         logger.error(f"Error processing chat for user {authenticated_user}: {e}")
-        await session.rollback()
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred processing your message. Please try again."

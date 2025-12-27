@@ -39,8 +39,16 @@ class User(SQLModel, table=True):
 class Task(SQLModel, table=True):
     """Task model representing user-owned todo items.
 
-    Demonstrates user data isolation pattern for Phase II.
+    Phase II: Basic task management with user isolation.
+    Phase V: Extended with advanced task management fields (priority, tags, due dates, recurring).
     All queries MUST filter by authenticated user_id.
+
+    Advanced Features:
+        - priority: Task priority level (low, medium, high)
+        - tags: JSON array of tags for categorization
+        - due_date: Optional deadline with timezone for reminders
+        - is_recurring: Boolean flag for repeating tasks
+        - recurring_interval: Repeat frequency (daily, weekly, monthly)
     """
     __tablename__ = "tasks"
 
@@ -49,6 +57,14 @@ class Task(SQLModel, table=True):
     title: str = Field(min_length=1, max_length=200)
     description: Optional[str] = Field(default=None, max_length=1000)
     completed: bool = Field(default=False)
+
+    # Phase V: Advanced task management fields
+    priority: str = Field(default="medium", max_length=10)  # 'low', 'medium', 'high'
+    tags: Optional[str] = Field(default="[]", sa_column=Column(Text))  # JSON array as string
+    due_date: Optional[datetime] = Field(default=None)
+    is_recurring: bool = Field(default=False)
+    recurring_interval: Optional[str] = Field(default=None, max_length=20)  # 'daily', 'weekly', 'monthly'
+
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
