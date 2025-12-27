@@ -118,7 +118,7 @@ class TaskCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(default=None, max_length=1000)
     priority: TaskPriority = Field(default=TaskPriority.MEDIUM)
-    tags: List[str] = Field(default_factory=list, max_length=10)
+    tags: List[str] = Field(default_factory=list)
     due_date: Optional[datetime] = None
     is_recurring: bool = Field(default=False)
     recurring_interval: Optional[RecurringInterval] = None

@@ -52,14 +52,14 @@ frontend:
       memory: "256Mi"
       cpu: "300m"
   env:
-    NEXT_PUBLIC_API_URL: "http://localhost:30800"
+    NEXT_PUBLIC_API_URL: "http://localhost:8000"
 
 # ConfigMap data (non-sensitive configuration)
 config:
   NODE_ENV: "production"
   LOG_LEVEL: "info"
   ALLOWED_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000"
-  OAUTH_REDIRECT_URI: "http://localhost:30800/api/auth"
+  OAUTH_REDIRECT_URI: "http://localhost:8000/api/auth"
 
 # Secret reference (must be created externally before helm install)
 secrets:

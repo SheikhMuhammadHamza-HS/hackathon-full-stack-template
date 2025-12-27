@@ -7,12 +7,12 @@
 /**
  * Task priority levels
  */
-export type TaskPriority = 'Low' | 'Medium' | 'High';
+export type TaskPriority = 'low' | 'medium' | 'high';
 
 /**
  * Recurring task intervals
  */
-export type RecurringInterval = 'Daily' | 'Weekly' | 'Monthly';
+export type RecurringInterval = 'daily' | 'weekly' | 'monthly';
 
 /**
  * Task entity as returned from API

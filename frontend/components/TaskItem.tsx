@@ -209,15 +209,15 @@ export function TaskItem({
               text-xs
               font-medium
               ${
-                task.priority === 'High'
+                task.priority === 'high'
                   ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                  : task.priority === 'Medium'
+                  : task.priority === 'medium'
                   ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
                   : 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
               }
             `}
           >
-            {task.priority}
+            {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
           </span>
 
           {/* Due Date Display */}

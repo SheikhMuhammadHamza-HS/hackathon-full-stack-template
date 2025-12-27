@@ -54,11 +54,11 @@ export function AddTaskForm({
   console.log('🔴🔴🔴 AddTaskForm LOADED - Priority fields should be visible! 🔴🔴🔴');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState<TaskPriority>('Medium');
+  const [priority, setPriority] = useState<TaskPriority>('medium');
   const [tagsInput, setTagsInput] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
-  const [recurringInterval, setRecurringInterval] = useState<RecurringInterval>('Daily');
+  const [recurringInterval, setRecurringInterval] = useState<RecurringInterval>('daily');
   const [errors, setErrors] = useState<{
     title?: string;
     description?: string;
@@ -170,11 +170,11 @@ export function AddTaskForm({
     // Clear form
     setTitle('');
     setDescription('');
-    setPriority('Medium');
+    setPriority('medium');
     setTagsInput('');
     setDueDate('');
     setIsRecurring(false);
-    setRecurringInterval('Daily');
+    setRecurringInterval('daily');
     setErrors({});
     onCancel();
   };
@@ -392,9 +392,9 @@ export function AddTaskForm({
             shadow-sm
           "
         >
-          <option value="Low">Low</option>
-          <option value="Medium">Medium</option>
-          <option value="High">High</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
         </select>
       </div>
 
@@ -586,9 +586,9 @@ export function AddTaskForm({
               aria-describedby={errors.recurring ? 'task-recurring-error' : undefined}
               aria-invalid={!!errors.recurring}
             >
-              <option value="Daily">Daily</option>
-              <option value="Weekly">Weekly</option>
-              <option value="Monthly">Monthly</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
             </select>
             <ErrorMessage message={errors.recurring} htmlFor="task-recurring-interval" />
           </div>

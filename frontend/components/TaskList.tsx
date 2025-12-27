@@ -119,10 +119,10 @@ export function TaskList({
 
     // Sort by priority
     if (prioritySort !== 'none') {
-      const priorityValues = { High: 3, Medium: 2, Low: 1 };
+      const priorityValues = { high: 3, medium: 2, low: 1 };
       filtered = filtered.slice().sort((a, b) => {
-        const aVal = priorityValues[a.priority];
-        const bVal = priorityValues[b.priority];
+        const aVal = priorityValues[a.priority] || 0;
+        const bVal = priorityValues[b.priority] || 0;
         return prioritySort === 'high-to-low' ? bVal - aVal : aVal - bVal;
       });
     }
@@ -377,9 +377,9 @@ export function TaskList({
                 "
               >
                 <option value="all">All Priorities</option>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
               </select>
             </div>
 
@@ -561,9 +561,9 @@ export function TaskList({
               "
             >
               <option value="all">All Priorities</option>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Low">Low</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
             </select>
           </div>
 
