@@ -26,7 +26,7 @@
 'use client';
 
 import { useState, FormEvent, useEffect, useRef } from 'react';
-import { CreateTaskPayload } from '@/types/task';
+import { CreateTaskPayload, TaskPriority, RecurringInterval } from '@/types/task';
 import { LoadingSpinner } from './LoadingSpinner';
 import { ErrorMessage } from './ErrorMessage';
 
@@ -41,6 +41,7 @@ interface AddTaskFormProps {
 
 const MAX_TITLE_LENGTH = 200;
 const MAX_DESCRIPTION_LENGTH = 1000;
+const MAX_TAGS = 10;
 
 /**
  * Form component for adding new tasks with modern UI design
@@ -50,9 +51,20 @@ export function AddTaskForm({
   onCancel,
   isSubmitting = false,
 }: AddTaskFormProps) {
+  console.log('🔴🔴🔴 AddTaskForm LOADED - Priority fields should be visible! 🔴🔴🔴');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [errors, setErrors] = useState<{ title?: string; description?: string }>({});
+  const [priority, setPriority] = useState<TaskPriority>('Medium');
+  const [tagsInput, setTagsInput] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringInterval, setRecurringInterval] = useState<RecurringInterval>('Daily');
+  const [errors, setErrors] = useState<{
+    title?: string;
+    description?: string;
+    tags?: string;
+    recurring?: string;
+  }>({});
   const [isLoading, setIsLoading] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
@@ -62,10 +74,29 @@ export function AddTaskForm({
   }, []);
 
   /**
+   * Parse and validate tags input
+   */
+  const parseTags = (): string[] | undefined => {
+    if (!tagsInput.trim()) return undefined;
+
+    const tags = tagsInput
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0);
+
+    return tags.length > 0 ? tags : undefined;
+  };
+
+  /**
    * Validate form inputs
    */
   const validate = (): boolean => {
-    const newErrors: { title?: string; description?: string } = {};
+    const newErrors: {
+      title?: string;
+      description?: string;
+      tags?: string;
+      recurring?: string;
+    } = {};
 
     // Title validation
     if (!title.trim()) {
@@ -77,6 +108,17 @@ export function AddTaskForm({
     // Description validation
     if (description.length > MAX_DESCRIPTION_LENGTH) {
       newErrors.description = `Description must be ${MAX_DESCRIPTION_LENGTH} characters or less`;
+    }
+
+    // Tags validation
+    const tags = parseTags();
+    if (tags && tags.length > MAX_TAGS) {
+      newErrors.tags = `Maximum ${MAX_TAGS} tags allowed`;
+    }
+
+    // Recurring validation
+    if (isRecurring && !recurringInterval) {
+      newErrors.recurring = 'Recurring interval is required for recurring tasks';
     }
 
     setErrors(newErrors);
@@ -98,9 +140,15 @@ export function AddTaskForm({
     }
 
     // Prepare payload
+    const tags = parseTags();
     const payload: CreateTaskPayload = {
       title: title.trim(),
       description: description.trim() || undefined,
+      priority,
+      tags,
+      due_date: dueDate || undefined,
+      is_recurring: isRecurring,
+      recurring_interval: isRecurring ? recurringInterval : undefined,
     };
 
     // Submit
@@ -122,6 +170,11 @@ export function AddTaskForm({
     // Clear form
     setTitle('');
     setDescription('');
+    setPriority('Medium');
+    setTagsInput('');
+    setDueDate('');
+    setIsRecurring(false);
+    setRecurringInterval('Daily');
     setErrors({});
     onCancel();
   };
@@ -295,6 +348,251 @@ export function AddTaskForm({
             {description.length}/{MAX_DESCRIPTION_LENGTH}
           </span>
         </div>
+      </div>
+
+      {/* Priority Dropdown */}
+      <div>
+        <label
+          htmlFor="task-priority"
+          className="
+            block
+            text-sm
+            font-medium
+            text-gray-700
+            dark:text-gray-300
+            mb-2
+          "
+        >
+          Priority
+        </label>
+        <select
+          id="task-priority"
+          value={priority}
+          onChange={(e) => setPriority(e.target.value as TaskPriority)}
+          disabled={loading}
+          className="
+            w-full
+            px-4
+            py-3
+            text-gray-900
+            dark:text-white
+            bg-white
+            dark:bg-gray-900
+            border
+            border-gray-300
+            dark:border-gray-600
+            rounded-lg
+            focus:outline-none
+            focus:ring-2
+            focus:ring-blue-500
+            focus:border-transparent
+            disabled:opacity-50
+            disabled:cursor-not-allowed
+            transition-colors
+            shadow-sm
+          "
+        >
+          <option value="Low">Low</option>
+          <option value="Medium">Medium</option>
+          <option value="High">High</option>
+        </select>
+      </div>
+
+      {/* Tags Input */}
+      <div>
+        <label
+          htmlFor="task-tags"
+          className="
+            block
+            text-sm
+            font-medium
+            text-gray-700
+            dark:text-gray-300
+            mb-2
+          "
+        >
+          Tags <span className="text-gray-400 text-xs">(optional)</span>
+        </label>
+        <input
+          id="task-tags"
+          type="text"
+          value={tagsInput}
+          onChange={(e) => setTagsInput(e.target.value)}
+          disabled={loading}
+          className="
+            w-full
+            px-4
+            py-3
+            text-gray-900
+            dark:text-white
+            bg-white
+            dark:bg-gray-900
+            border
+            border-gray-300
+            dark:border-gray-600
+            rounded-lg
+            focus:outline-none
+            focus:ring-2
+            focus:ring-blue-500
+            focus:border-transparent
+            disabled:opacity-50
+            disabled:cursor-not-allowed
+            transition-colors
+            shadow-sm
+          "
+          placeholder="Add tags (comma-separated)"
+          aria-describedby={errors.tags ? 'task-tags-error' : 'task-tags-hint'}
+          aria-invalid={!!errors.tags}
+        />
+        <div className="mt-2 flex items-center justify-between">
+          <ErrorMessage message={errors.tags} htmlFor="task-tags" />
+          <span
+            id="task-tags-hint"
+            className="text-xs text-gray-500 dark:text-gray-400"
+          >
+            {parseTags()?.length || 0} tag(s)
+          </span>
+        </div>
+      </div>
+
+      {/* Due Date Input */}
+      <div>
+        <label
+          htmlFor="task-due-date"
+          className="
+            block
+            text-sm
+            font-medium
+            text-gray-700
+            dark:text-gray-300
+            mb-2
+          "
+        >
+          Due Date <span className="text-gray-400 text-xs">(optional)</span>
+        </label>
+        <input
+          id="task-due-date"
+          type="datetime-local"
+          value={dueDate}
+          onChange={(e) => setDueDate(e.target.value)}
+          disabled={loading}
+          className="
+            w-full
+            px-4
+            py-3
+            text-gray-900
+            dark:text-white
+            bg-white
+            dark:bg-gray-900
+            border
+            border-gray-300
+            dark:border-gray-600
+            rounded-lg
+            focus:outline-none
+            focus:ring-2
+            focus:ring-blue-500
+            focus:border-transparent
+            disabled:opacity-50
+            disabled:cursor-not-allowed
+            transition-colors
+            shadow-sm
+          "
+        />
+      </div>
+
+      {/* Recurring Task Checkbox and Interval */}
+      <div>
+        <div className="flex items-center gap-3 mb-3">
+          <input
+            id="task-recurring"
+            type="checkbox"
+            checked={isRecurring}
+            onChange={(e) => setIsRecurring(e.target.checked)}
+            disabled={loading}
+            className="
+              w-5
+              h-5
+              text-blue-600
+              bg-gray-50
+              dark:bg-gray-900
+              border-gray-300
+              dark:border-gray-600
+              rounded
+              focus:ring-2
+              focus:ring-blue-500
+              focus:ring-offset-2
+              dark:focus:ring-offset-gray-800
+              transition-colors
+              cursor-pointer
+              disabled:opacity-50
+              disabled:cursor-not-allowed
+            "
+          />
+          <label
+            htmlFor="task-recurring"
+            className="
+              text-sm
+              font-medium
+              text-gray-700
+              dark:text-gray-300
+              cursor-pointer
+            "
+          >
+            Recurring Task
+          </label>
+        </div>
+
+        {isRecurring && (
+          <div>
+            <label
+              htmlFor="task-recurring-interval"
+              className="
+                block
+                text-sm
+                font-medium
+                text-gray-700
+                dark:text-gray-300
+                mb-2
+              "
+            >
+              Recurring Interval
+            </label>
+            <select
+              id="task-recurring-interval"
+              value={recurringInterval}
+              onChange={(e) => setRecurringInterval(e.target.value as RecurringInterval)}
+              disabled={loading}
+              className="
+                w-full
+                px-4
+                py-3
+                text-gray-900
+                dark:text-white
+                bg-white
+                dark:bg-gray-900
+                border
+                border-gray-300
+                dark:border-gray-600
+                rounded-lg
+                focus:outline-none
+                focus:ring-2
+                focus:ring-blue-500
+                focus:border-transparent
+                disabled:opacity-50
+                disabled:cursor-not-allowed
+                transition-colors
+                shadow-sm
+              "
+              aria-describedby={errors.recurring ? 'task-recurring-error' : undefined}
+              aria-invalid={!!errors.recurring}
+            >
+              <option value="Daily">Daily</option>
+              <option value="Weekly">Weekly</option>
+              <option value="Monthly">Monthly</option>
+            </select>
+            <ErrorMessage message={errors.recurring} htmlFor="task-recurring-interval" />
+          </div>
+        )}
       </div>
 
       {/* Action Buttons */}

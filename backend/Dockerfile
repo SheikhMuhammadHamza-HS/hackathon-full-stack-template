@@ -43,22 +43,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 RUN useradd --create-home --uid 10001 appuser
 
 # Copy virtual environment from builder
-COPY --from=builder /app/.venv /app/.venv
+# Copy virtual environment from builder (with correct ownership)
+COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 
 # Copy application source code
-COPY app/ /app/app/
+COPY --chown=appuser:appuser app/ /app/app/
 
-# Copy alembic configuration and migrations (if needed for startup)
-COPY alembic.ini /app/
-COPY alembic/ /app/alembic/
+# Copy alembic configuration and migrations
+COPY --chown=appuser:appuser alembic.ini /app/
+COPY --chown=appuser:appuser alembic/ /app/alembic/
 
 # Set environment variables
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Change ownership to non-root user
-RUN chown -R appuser:appuser /app
+# Change ownership not needed anymore
+# RUN chown -R appuser:appuser /app
 
 # Switch to non-root user
 USER appuser

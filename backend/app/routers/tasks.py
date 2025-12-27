@@ -1,19 +1,28 @@
 """Task CRUD API endpoints with user isolation.
 
 Implements: Spec requirement T062-T070 for task management
+Phase V: Extended with advanced filtering and sorting (T003, T004, T006, T009)
+Phase V: Extended with Dapr Pub/Sub event publishing (009-dapr-pubsub-events)
+
 All endpoints enforce strict user isolation - tasks can only be accessed
 by their owner. Authentication via JWT is required for all operations.
 """
+import logging
 from datetime import datetime
-from typing import List
-from fastapi import APIRouter, HTTPException, Depends, status
-from sqlmodel import select
+from typing import List, Optional
+import json
+from fastapi import APIRouter, HTTPException, Depends, status, Query
+from sqlmodel import select, or_, desc, asc
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.auth import verify_jwt
 from app.database import get_session
 from app.models import Task
-from app.schemas import TaskCreate, TaskUpdate, TaskResponse
+from app.schemas import TaskCreate, TaskUpdate, TaskResponse, TaskPriority, RecurringInterval
+# Phase V: Dapr Pub/Sub event publishing
+from app.events.publisher import publish_event
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -76,17 +85,42 @@ async def _get_user_task(
 async def get_tasks(
     user_id: str,
     authenticated_user: str = Depends(verify_jwt),
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session),
+    # T003: Priority filtering
+    priority: Optional[TaskPriority] = Query(default=None, description="Filter by priority (low, medium, high)"),
+    # T004: Priority and due_date sorting
+    sort_by: Optional[str] = Query(
+        default=None,
+        description="Sort tasks (priority_asc, priority_desc, due_date_asc, due_date_desc)",
+        regex="^(priority_asc|priority_desc|due_date_asc|due_date_desc)$"
+    ),
+    # T006: Tag filtering (comma-separated, OR logic, case-insensitive)
+    tags: Optional[str] = Query(default=None, description="Filter by tags (comma-separated, matches ANY tag)"),
+    # T009: Due date filtering
+    due_before: Optional[datetime] = Query(default=None, description="Filter tasks due before this datetime"),
+    due_after: Optional[datetime] = Query(default=None, description="Filter tasks due after this datetime")
 ):
     """
-    List all tasks for the authenticated user.
+    List all tasks for the authenticated user with filtering and sorting.
 
-    Implements: T062 - GET /api/{user_id}/tasks
+    Implements:
+    - T062: GET /api/{user_id}/tasks (base functionality)
+    - T003: Priority filtering
+    - T004: Priority sorting
+    - T006: Tag filtering (OR logic, case-insensitive)
+    - T009: Due date filtering and sorting
 
     Security:
     - Requires valid JWT token
     - Validates user_id matches authenticated user
     - Returns only tasks owned by authenticated user
+
+    Query Parameters:
+        priority: Filter by priority level (low, medium, high)
+        sort_by: Sort order (priority_asc, priority_desc, due_date_asc, due_date_desc)
+        tags: Comma-separated tag list (matches ANY tag, case-insensitive)
+        due_before: Filter tasks due before this datetime (ISO format)
+        due_after: Filter tasks due after this datetime (ISO format)
 
     Args:
         user_id: User ID from URL path
@@ -94,7 +128,7 @@ async def get_tasks(
         session: Database session
 
     Returns:
-        List[TaskResponse]: List of user's tasks ordered by creation date
+        List[TaskResponse]: List of user's tasks with applied filters and sorting
 
     Raises:
         HTTPException 401: Invalid or missing JWT token
@@ -105,14 +139,88 @@ async def get_tasks(
     await _validate_user_access(user_id, authenticated_user)
 
     try:
-        # Query tasks filtered by authenticated_user (NOT url user_id)
-        result = await session.execute(
-            select(Task)
-            .where(Task.user_id == authenticated_user)
-            .order_by(Task.created_at.desc())
-        )
+        # Base query: filter by authenticated user
+        query = select(Task).where(Task.user_id == authenticated_user)
+
+        # T003: Apply priority filter if provided
+        if priority:
+            query = query.where(Task.priority == priority.value)
+
+        # T006: Apply tag filter if provided (OR logic, case-insensitive)
+        if tags:
+            tag_list = [tag.strip().lower() for tag in tags.split(',') if tag.strip()]
+            if tag_list:
+                # Filter tasks where tags JSON array contains ANY of the requested tags
+                # Use OR conditions to match any tag (case-insensitive)
+                tag_conditions = []
+                for tag in tag_list:
+                    # PostgreSQL: JSON array contains check (case-insensitive)
+                    # Note: This requires proper JSON parsing since tags are stored as JSON strings
+                    tag_conditions.append(Task.tags.like(f'%"{tag}"%'))
+                    # Also check for case variations
+                    tag_conditions.append(Task.tags.like(f'%"{tag.capitalize()}"%'))
+                    tag_conditions.append(Task.tags.like(f'%"{tag.upper()}"%'))
+
+                if tag_conditions:
+                    query = query.where(or_(*tag_conditions))
+
+        # T009: Apply due_date filters if provided
+        if due_before:
+            query = query.where(Task.due_date < due_before)
+        if due_after:
+            query = query.where(Task.due_date > due_after)
+
+        # T004 & T009: Apply sorting if specified
+        if sort_by:
+            # Priority sorting (high=3, medium=2, low=1)
+            if sort_by == "priority_desc":
+                # High → Medium → Low
+                query = query.order_by(
+                    desc(Task.priority)
+                )
+            elif sort_by == "priority_asc":
+                # Low → Medium → High
+                query = query.order_by(
+                    asc(Task.priority)
+                )
+            elif sort_by == "due_date_desc":
+                # Latest first (nulls last)
+                query = query.order_by(
+                    desc(Task.due_date)
+                )
+            elif sort_by == "due_date_asc":
+                # Earliest first (nulls last)
+                query = query.order_by(
+                    asc(Task.due_date)
+                )
+        else:
+            # Default: order by creation date (newest first)
+            query = query.order_by(Task.created_at.desc())
+
+        # Execute query
+        result = await session.execute(query)
         tasks = result.scalars().all()
-        return tasks
+
+        # Parse tags JSON strings to lists for response
+        response_tasks = []
+        for task in tasks:
+            task_dict = {
+                "id": task.id,
+                "user_id": task.user_id,
+                "title": task.title,
+                "description": task.description,
+                "completed": task.completed,
+                "priority": task.priority,
+                "tags": json.loads(task.tags) if task.tags else [],
+                "due_date": task.due_date,
+                "is_recurring": task.is_recurring,
+                "recurring_interval": task.recurring_interval,
+                "created_at": task.created_at,
+                "updated_at": task.updated_at
+            }
+            response_tasks.append(TaskResponse(**task_dict))
+
+        return response_tasks
 
     except Exception as e:
         # Log error server-side, return generic message
@@ -133,7 +241,9 @@ async def create_task(
     """
     Create a new task for the authenticated user.
 
-    Implements: T063 - POST /api/{user_id}/tasks
+    Implements:
+    - T063: POST /api/{user_id}/tasks (base functionality)
+    - Phase V: Extended with advanced task fields (priority, tags, due_date, recurring)
 
     Security:
     - Requires valid JWT token
@@ -142,7 +252,7 @@ async def create_task(
 
     Args:
         user_id: User ID from URL path
-        task_data: Task creation data (title, description)
+        task_data: Task creation data with all fields including advanced features
         authenticated_user: User ID extracted from JWT
         session: Database session
 
@@ -152,19 +262,34 @@ async def create_task(
     Raises:
         HTTPException 401: Invalid or missing JWT token
         HTTPException 403: user_id doesn't match authenticated user
-        HTTPException 400: Invalid task data
+        HTTPException 400: Invalid task data (validation errors)
         HTTPException 500: Database error
     """
     # Validate user_id matches JWT user_id
     await _validate_user_access(user_id, authenticated_user)
 
     try:
-        # Create task with authenticated_user as owner
+        # Normalize due_date to naive datetime (remove timezone for DB compatibility)
+        due_date_normalized = None
+        if task_data.due_date:
+            if task_data.due_date.tzinfo is not None:
+                # Convert to UTC and make naive
+                due_date_normalized = task_data.due_date.replace(tzinfo=None)
+            else:
+                due_date_normalized = task_data.due_date
+
+        # Create task with authenticated_user as owner and all new fields
         task = Task(
             user_id=authenticated_user,  # Use JWT user_id, not URL user_id
             title=task_data.title,
             description=task_data.description,
             completed=False,
+            # Phase V: Advanced task fields
+            priority=task_data.priority.value,
+            tags=json.dumps(task_data.tags),  # Store as JSON string
+            due_date=due_date_normalized,
+            is_recurring=task_data.is_recurring,
+            recurring_interval=task_data.recurring_interval.value if task_data.recurring_interval else None,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
@@ -173,11 +298,44 @@ async def create_task(
         await session.commit()
         await session.refresh(task)
 
-        return task
+        # Phase V: Publish task.created event (fire-and-forget)
+        await publish_event(
+            topic="tasks",
+            event_type="task.created",
+            data={
+                "task_id": task.id,
+                "title": task.title,
+                "description": task.description,
+                "priority": task.priority,
+                "tags": json.loads(task.tags) if task.tags else [],
+                "due_date": task.due_date.isoformat() if task.due_date else None,
+                "is_recurring": task.is_recurring,
+                "recurring_interval": task.recurring_interval
+            },
+            user_id=authenticated_user
+        )
+
+        # Parse tags JSON string to list for response
+        response_data = {
+            "id": task.id,
+            "user_id": task.user_id,
+            "title": task.title,
+            "description": task.description,
+            "completed": task.completed,
+            "priority": task.priority,
+            "tags": json.loads(task.tags) if task.tags else [],
+            "due_date": task.due_date,
+            "is_recurring": task.is_recurring,
+            "recurring_interval": task.recurring_interval,
+            "created_at": task.created_at,
+            "updated_at": task.updated_at
+        }
+
+        return TaskResponse(**response_data)
 
     except Exception as e:
         # Log error server-side, return generic message
-        print(f"Database error in create_task: {e}")
+        logger.error(f"Database error in create_task: {e}")
         await session.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -196,7 +354,9 @@ async def update_task(
     """
     Update an existing task.
 
-    Implements: T064 - PATCH /api/{user_id}/tasks/{task_id}
+    Implements:
+    - T064: PATCH /api/{user_id}/tasks/{task_id} (base functionality)
+    - Phase V: Extended with advanced task fields (priority, tags, due_date, recurring)
 
     Security:
     - Requires valid JWT token
@@ -206,7 +366,7 @@ async def update_task(
     Args:
         user_id: User ID from URL path
         task_id: Task ID to update
-        task_data: Fields to update (title, description, completed)
+        task_data: Fields to update (all fields are optional for partial updates)
         authenticated_user: User ID extracted from JWT
         session: Database session
 
@@ -217,7 +377,7 @@ async def update_task(
         HTTPException 401: Invalid or missing JWT token
         HTTPException 403: user_id doesn't match authenticated user
         HTTPException 404: Task not found or doesn't belong to user
-        HTTPException 400: Invalid task data
+        HTTPException 400: Invalid task data (validation errors)
         HTTPException 500: Database error
     """
     # Validate user_id matches JWT user_id
@@ -227,7 +387,7 @@ async def update_task(
         # Get task and verify ownership
         task = await _get_user_task(task_id, authenticated_user, session)
 
-        # Update only provided fields
+        # Update only provided fields (partial update)
         if task_data.title is not None:
             task.title = task_data.title
         if task_data.description is not None:
@@ -235,20 +395,99 @@ async def update_task(
         if task_data.completed is not None:
             task.completed = task_data.completed
 
+        # Phase V: Update advanced task fields if provided
+        if task_data.priority is not None:
+            task.priority = task_data.priority.value
+        if task_data.tags is not None:
+            task.tags = json.dumps(task_data.tags)
+        if task_data.due_date is not None:
+            # Normalize due_date to naive datetime
+            if task_data.due_date.tzinfo is not None:
+                task.due_date = task_data.due_date.replace(tzinfo=None)
+            else:
+                task.due_date = task_data.due_date
+        if task_data.is_recurring is not None:
+            task.is_recurring = task_data.is_recurring
+        if task_data.recurring_interval is not None:
+            task.recurring_interval = task_data.recurring_interval.value
+
+        # Track changed fields for event
+        changed_fields = []
+        if task_data.title is not None:
+            changed_fields.append("title")
+        if task_data.description is not None:
+            changed_fields.append("description")
+        if task_data.completed is not None:
+            changed_fields.append("completed")
+        if task_data.priority is not None:
+            changed_fields.append("priority")
+        if task_data.tags is not None:
+            changed_fields.append("tags")
+        if task_data.due_date is not None:
+            changed_fields.append("due_date")
+        if task_data.is_recurring is not None:
+            changed_fields.append("is_recurring")
+        if task_data.recurring_interval is not None:
+            changed_fields.append("recurring_interval")
+
         task.updated_at = datetime.utcnow()
 
         session.add(task)
         await session.commit()
         await session.refresh(task)
 
-        return task
+        # Phase V: Publish task.updated event (fire-and-forget)
+        await publish_event(
+            topic="tasks",
+            event_type="task.updated",
+            data={
+                "task_id": task.id,
+                "changed_fields": changed_fields,
+                "priority": task.priority,
+                "due_date": task.due_date.isoformat() if task.due_date else None
+            },
+            user_id=authenticated_user
+        )
+
+        # Check if completion status changed - publish task.completed event
+        if task_data.completed is not None:
+            await publish_event(
+                topic="tasks",
+                event_type="task.completed",
+                data={
+                    "task_id": task.id,
+                    "completed": task.completed,
+                    "is_recurring": task.is_recurring,
+                    "recurring_interval": task.recurring_interval,
+                    "due_date": task.due_date.isoformat() if task.due_date else None
+                },
+                user_id=authenticated_user
+            )
+
+        # Parse tags JSON string to list for response
+        response_data = {
+            "id": task.id,
+            "user_id": task.user_id,
+            "title": task.title,
+            "description": task.description,
+            "completed": task.completed,
+            "priority": task.priority,
+            "tags": json.loads(task.tags) if task.tags else [],
+            "due_date": task.due_date,
+            "is_recurring": task.is_recurring,
+            "recurring_interval": task.recurring_interval,
+            "created_at": task.created_at,
+            "updated_at": task.updated_at
+        }
+
+        return TaskResponse(**response_data)
 
     except HTTPException:
         # Re-raise HTTP exceptions (404, 403)
         raise
     except Exception as e:
         # Log error server-side, return generic message
-        print(f"Database error in update_task: {e}")
+        logger.error(f"Database error in update_task: {e}")
         await session.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -299,12 +538,20 @@ async def delete_task(
         await session.delete(task)
         await session.commit()
 
+        # Phase V: Publish task.deleted event (fire-and-forget)
+        await publish_event(
+            topic="tasks",
+            event_type="task.deleted",
+            data={"task_id": task_id},
+            user_id=authenticated_user
+        )
+
     except HTTPException:
         # Re-raise HTTP exceptions (404, 403)
         raise
     except Exception as e:
         # Log error server-side, return generic message
-        print(f"Database error in delete_task: {e}")
+        logger.error(f"Database error in delete_task: {e}")
         await session.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -359,14 +606,45 @@ async def toggle_task_completion(
         await session.commit()
         await session.refresh(task)
 
-        return task
+        # Phase V: Publish task.completed event (fire-and-forget)
+        # This event triggers recurring task generation if applicable
+        await publish_event(
+            topic="tasks",
+            event_type="task.completed",
+            data={
+                "task_id": task.id,
+                "completed": task.completed,
+                "is_recurring": task.is_recurring,
+                "recurring_interval": task.recurring_interval,
+                "due_date": task.due_date.isoformat() if task.due_date else None
+            },
+            user_id=authenticated_user
+        )
+
+        # Parse tags JSON string to list for response
+        response_data = {
+            "id": task.id,
+            "user_id": task.user_id,
+            "title": task.title,
+            "description": task.description,
+            "completed": task.completed,
+            "priority": task.priority,
+            "tags": json.loads(task.tags) if task.tags else [],
+            "due_date": task.due_date,
+            "is_recurring": task.is_recurring,
+            "recurring_interval": task.recurring_interval,
+            "created_at": task.created_at,
+            "updated_at": task.updated_at
+        }
+
+        return TaskResponse(**response_data)
 
     except HTTPException:
         # Re-raise HTTP exceptions (404, 403)
         raise
     except Exception as e:
         # Log error server-side, return generic message
-        print(f"Database error in toggle_task_completion: {e}")
+        logger.error(f"Database error in toggle_task_completion: {e}")
         await session.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -37,6 +37,8 @@ interface TaskItemProps {
   onEdit: (task: Task) => void;
   /** Callback when delete button is clicked */
   onDelete: (taskId: number) => Promise<void>;
+  /** Callback when tag chip is clicked */
+  onTagClick?: (tag: string) => void;
 }
 
 /**
@@ -47,6 +49,7 @@ export function TaskItem({
   onToggleComplete,
   onEdit,
   onDelete,
+  onTagClick,
 }: TaskItemProps) {
   const [isToggling, setIsToggling] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -161,10 +164,104 @@ export function TaskItem({
             {task.description}
           </p>
         )}
-        <div className="mt-3 flex items-center gap-4 text-xs text-gray-500 dark:text-gray-500">
+
+        {/* Tags Display */}
+        {task.tags && task.tags.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {task.tags.map((tag, index) => (
+              <button
+                key={index}
+                onClick={() => onTagClick?.(tag)}
+                className="
+                  inline-flex
+                  items-center
+                  px-2.5
+                  py-0.5
+                  rounded-full
+                  text-xs
+                  font-medium
+                  bg-blue-100
+                  text-blue-800
+                  dark:bg-blue-900/30
+                  dark:text-blue-400
+                  hover:bg-blue-200
+                  dark:hover:bg-blue-800/40
+                  transition-colors
+                  cursor-pointer
+                "
+                title={`Filter by tag: ${tag}`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-3 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-500 flex-wrap">
+          {/* Priority Badge */}
+          <span
+            className={`
+              inline-flex
+              items-center
+              px-2
+              py-0.5
+              rounded-full
+              text-xs
+              font-medium
+              ${
+                task.priority === 'High'
+                  ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                  : task.priority === 'Medium'
+                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                  : 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
+              }
+            `}
+          >
+            {task.priority}
+          </span>
+
+          {/* Due Date Display */}
+          {task.due_date && (
+            <span
+              className={`
+                inline-flex
+                items-center
+                px-2
+                py-0.5
+                rounded-full
+                text-xs
+                font-medium
+                ${
+                  new Date(task.due_date) < new Date()
+                    ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                    : 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
+                }
+              `}
+            >
+              {new Date(task.due_date) < new Date() && '⚠️ OVERDUE: '}
+              Due: {new Date(task.due_date).toLocaleString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </span>
+          )}
+
+          {/* Recurring Badge */}
+          {task.is_recurring && task.recurring_interval && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400">
+              🔄 {task.recurring_interval}
+            </span>
+          )}
+
+          {/* Created Date */}
           <span>
             Created {new Date(task.created_at).toLocaleDateString()}
           </span>
+
+          {/* Completed Badge */}
           {task.completed && (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
               <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

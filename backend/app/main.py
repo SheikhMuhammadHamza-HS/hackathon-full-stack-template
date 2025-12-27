@@ -69,7 +69,7 @@ async def root():
 
 
 # Import and include routers
-from app.routers import auth, tasks, admin, chat
+from app.routers import auth, tasks, admin, chat, events
 
 # Register chat limiter with app state (required for SlowAPI)
 from app.routers.chat import limiter as chat_limiter
@@ -79,3 +79,5 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(tasks.router, prefix="/api", tags=["Tasks"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin (Dev Only)"])
 app.include_router(chat.router, prefix="/api", tags=["Chat"])
+# Phase V: Dapr Pub/Sub event handlers
+app.include_router(events.router, tags=["Events"])

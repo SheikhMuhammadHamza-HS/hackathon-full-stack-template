@@ -1,29 +1,32 @@
 <!--
 Sync Impact Report:
-- Version Change: 4.0.0 → 4.1.0 (MINOR)
-- Rationale: Enhanced Phase IV constitution with concrete examples, corrected Python version, added missing patterns
+- Version Change: 4.1.0 → 5.0.0 (MAJOR)
+- Rationale: Fundamental architecture shift from synchronous HTTP to event-driven Dapr+Kafka. Introduces breaking changes in service communication patterns, deployment targets (local → cloud), and infrastructure automation (manual → CI/CD).
 - Modified Principles:
-  * XVII. Container-First Architecture → Updated Python version 3.11→3.13, added graceful shutdown example, updated image size target
-  * XIX. Immutable Infrastructure → Added graceful shutdown code example
-  * XXI. Health Checks and Observability → Added frontend health check example, added resource limits example
-- New Sections Added:
-  * Graceful shutdown pattern with Python code example
-  * Frontend health check example (Next.js API route)
-  * Resource limits example with concrete values
-  * Secret management production recommendation
-- Removed Sections: None
+  * I. Production-Ready Architecture → Extended to Event-Driven & Sidecar Pattern
+  * XII. Cloud-Native Deployment → Minikube → Cloud (DOKS/AKS/GKE)
+  * XVII. Container-First Architecture → Added Dapr sidecar annotations
+  * XXI. Health Checks and Observability → Added Dapr observability integration
+- New Principles Added:
+  * XXII. Event-Driven Architecture (Pub/Sub via Dapr+Kafka)
+  * XXIII. Sidecar Pattern with Dapr Abstraction
+  * XXIV. Infrastructure Independence and Portability
+  * XXV. Automated Delivery with CI/CD
+  * XXVI. Advanced Task Management Features
+- Removed Sections: None (all Phase IV principles remain valid)
 - Templates Requiring Updates:
-  ⚠ plan-template.md (Must reference containerization, K8s deployment, health checks)
-  ⚠ spec-template.md (Must include deployment requirements, resource limits)
-  ⚠ tasks-template.md (Must include Docker build, K8s manifests, Helm chart tasks)
+  ⚠ plan-template.md (Must include Dapr components, Kafka topics, event flows)
+  ⚠ spec-template.md (Must include event definitions, async workflows)
+  ⚠ tasks-template.md (Must include Dapr setup, Kafka deployment, CI/CD tasks)
 - Follow-up TODOs:
-  * Create Dockerfile templates for backend and frontend
-  * Create Kubernetes manifest templates
-  * Create Helm chart structure template
-  * Document Minikube setup and testing procedures
+  * Create Dapr component YAML templates (pubsub, statestore, secretstore)
+  * Create GitHub Actions workflow templates
+  * Create cloud provider deployment guides (DOKS, AKS)
+  * Document Kafka/Redpanda setup procedures
+  * Create event schema documentation template
 -->
 
-# Phase IV Local Kubernetes Deployment Constitution
+# Phase V Cloud Deployment & Event-Driven Architecture Constitution
 
 ## Phase Transition Context
 
@@ -33,663 +36,785 @@ Sync Impact Report:
 
 **Phase III (AI-Powered Chatbot)**: Introduced the **Intelligence Layer** with AI agents, MCP tools, and conversational interface. Users can interact via natural language while traditional GUI remains functional. MCP bridges AI and application logic.
 
-**Phase IV (Local Kubernetes Deployment)**: Transitions from localhost development to **containerized, orchestrated deployment** on local Kubernetes (Minikube). Applications are packaged as Docker containers, deployed as Kubernetes pods, and managed through declarative manifests. This phase teaches cloud-native patterns, container orchestration, horizontal scaling, and production deployment fundamentals.
+**Phase IV (Local Kubernetes Deployment)**: Transitioned from localhost development to **containerized, orchestrated deployment** on local Kubernetes (Minikube). Applications packaged as Docker containers, deployed as Kubernetes pods, managed through declarative manifests. Demonstrated cloud-native patterns: immutable infrastructure, horizontal scaling, self-healing.
 
-**Why This Transition Matters**: Modern cloud applications run in containers orchestrated by Kubernetes, not on bare metal servers. Phase IV demonstrates production deployment patterns: immutable infrastructure (containers are disposable), declarative configuration (manifests define desired state), horizontal scaling (multiple replicas), self-healing (Kubernetes restarts failed pods), and infrastructure-as-code. These are essential skills for deploying applications to any cloud provider (AWS, GCP, Azure, DigitalOcean).
+**Phase V (Cloud Deployment & Event-Driven Architecture)**: Transforms the application into a **distributed, event-driven system** deployed on real cloud infrastructure. Introduces the **Architecture of Intelligence** through Dapr sidecars and Kafka event streaming. Services communicate asynchronously through events instead of synchronous HTTP calls. Automated CI/CD pipelines replace manual deployments. Advanced task features (recurring tasks, reminders, priorities) leverage event-driven patterns.
+
+**Why This Transition Matters**: Modern distributed systems use event-driven architectures for scalability, resilience, and decoupling. Dapr provides infrastructure abstractions (Pub/Sub, State, Secrets) that work across any cloud provider. Kafka enables asynchronous processing, event sourcing, and real-time data pipelines. CI/CD automation ensures reliable, repeatable deployments. This is the architecture used by production systems at scale (Netflix, Uber, LinkedIn).
 
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    KUBERNETES CLUSTER (Minikube)             │
-│                                                              │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │  Namespace: todo-app                                    │ │
-│  │                                                          │ │
-│  │  ┌──────────────────────┐    ┌──────────────────────┐  │ │
-│  │  │ Frontend Deployment  │    │ Backend Deployment    │  │ │
-│  │  │ (2 replicas)         │    │ (2 replicas)         │  │ │
-│  │  │                      │    │                      │  │ │
-│  │  │ ┌────────┐ ┌────────┐│    │ ┌────────┐ ┌────────┐│  │ │
-│  │  │ │Pod 1   │ │Pod 2   ││    │ │Pod 1   │ │Pod 2   ││  │ │
-│  │  │ │Next.js │ │Next.js ││    │ │FastAPI │ │FastAPI ││  │ │
-│  │  │ │Container│ │Container││    │ │Container│ │Container││  │ │
-│  │  │ └────────┘ └────────┘│    │ └────────┘ └────────┘│  │ │
-│  │  └──────────┬────────────┘    └──────────┬───────────┘  │ │
-│  │             │                            │              │ │
-│  │             ▼                            ▼              │ │
-│  │  ┌──────────────────┐        ┌──────────────────┐      │ │
-│  │  │ frontend-service │        │ backend-service  │      │ │
-│  │  │ (LoadBalancer)   │        │ (ClusterIP)      │      │ │
-│  │  └────────┬─────────┘        └────────┬─────────┘      │ │
-│  │           │                           │                │ │
-│  └───────────┼───────────────────────────┼────────────────┘ │
-│              │                           │                  │
-└──────────────┼───────────────────────────┼──────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│                    CLOUD KUBERNETES CLUSTER (DOKS/AKS/GKE)            │
+│                                                                        │
+│  ┌──────────────────────────────────────────────────────────────────┐ │
+│  │  Namespace: todo-app                                              │ │
+│  │                                                                    │ │
+│  │  ┌─────────────────────┐           ┌─────────────────────┐        │ │
+│  │  │ Frontend Deployment │           │ Backend Deployment  │        │ │
+│  │  │ (2+ replicas)       │           │ (2+ replicas)       │        │ │
+│  │  │                     │           │                     │        │ │
+│  │  │ ┌────────────────┐  │           │ ┌────────────────┐  │        │ │
+│  │  │ │ Pod 1          │  │           │ │ Pod 1          │  │        │ │
+│  │  │ │ ┌────────────┐ │  │           │ │ ┌────────────┐ │  │        │ │
+│  │  │ │ │ Next.js    │ │  │           │ │ │ FastAPI    │ │  │        │ │
+│  │  │ │ │ Container  │ │  │           │ │ │ Container  │ │  │        │ │
+│  │  │ │ └────────────┘ │  │           │ │ └────────────┘ │  │        │ │
+│  │  │ │ ┌────────────┐ │  │           │ │ ┌────────────┐ │  │        │ │
+│  │  │ │ │ Dapr       │ │  │           │ │ │ Dapr       │ │  │        │ │
+│  │  │ │ │ Sidecar    │ │  │◄──────────┼─┼─┤ Sidecar    │ │  │        │ │
+│  │  │ │ └────────────┘ │  │  Service  │ │ └────────────┘ │  │        │ │
+│  │  │ └────────┬───────┘  │ Invocation│ └────────┬───────┘  │        │ │
+│  │  │          │          │           │          │          │        │ │
+│  │  └──────────┼──────────┘           └──────────┼──────────┘        │ │
+│  │             │                                  │                   │ │
+│  │             │         ┌────────────────────┐   │                   │ │
+│  │             │         │ Kafka / Redpanda   │   │                   │ │
+│  │             └────────►│ Event Streaming    │◄──┘                   │ │
+│  │                       │                    │                       │ │
+│  │                       │ Topics:            │                       │ │
+│  │                       │ - task-events      │                       │ │
+│  │                       │ - reminders        │                       │ │
+│  │                       │ - task-updates     │                       │ │
+│  │                       └────────────────────┘                       │ │
+│  │                                                                    │ │
+│  │  ┌──────────────────┐        ┌──────────────────┐                 │ │
+│  │  │ frontend-service │        │ backend-service  │                 │ │
+│  │  │ (LoadBalancer)   │        │ (ClusterIP)      │                 │ │
+│  │  └────────┬─────────┘        └────────┬─────────┘                 │ │
+│  │           │                           │                           │ │
+│  └───────────┼───────────────────────────┼───────────────────────────┘ │
+│              │                           │                             │
+└──────────────┼───────────────────────────┼─────────────────────────────┘
                │                           │
                ▼                           ▼
-         External Access            External Database
-      (localhost:XXXXX)           (Neon PostgreSQL)
+         Public IP/Domain           External Database
+       (LoadBalancer URL)          (Neon PostgreSQL)
 
-Phase III Flow: localhost:3000 → localhost:8000 → Neon
 Phase IV Flow: LoadBalancer → Pod → ClusterIP → Pod → Neon
+Phase V Flow: LoadBalancer → Dapr → Kafka → Dapr → Pod → Neon
 ```
 
-**Key Changes**:
-- Applications run in **Docker containers** (isolated, reproducible)
-- Containers managed by **Kubernetes pods** (scheduling, restart)
-- Pods grouped in **Deployments** (replicas, rolling updates)
-- **Services** provide stable networking (load balancing)
-- **ConfigMaps** and **Secrets** inject configuration
-- Multiple replicas enable **horizontal scaling**
+**Key Changes from Phase IV**:
+- **Dapr sidecars** run alongside application containers (sidecar pattern)
+- **Kafka/Redpanda** handles event streaming (asynchronous communication)
+- Services communicate via **Dapr Pub/Sub** (not direct HTTP for async operations)
+- **Service Invocation** through Dapr (resilience, retries, circuit breakers)
+- **State management** via Dapr State Store (chatbot session history)
+- **Secrets** fetched via Dapr Secret Store (not direct Kubernetes Secrets)
+- Deployed on **real cloud cluster** (DigitalOcean, Azure, or GCP)
+- **CI/CD automation** (GitHub Actions) replaces manual deployments
 
 ## Core Principles (Phases I-III - Still Valid)
 
-All principles from Phases I-III remain in effect. Phase IV adds deployment and infrastructure principles while preserving application architecture, security, and development methodology.
+All principles from Phases I-III remain in effect. Phase V adds event-driven architecture, Dapr integration, cloud deployment, and CI/CD automation while preserving application security, data integrity, and development methodology.
 
-### I. Production-Ready Container-Native Architecture
+### I. Production-Ready Event-Driven Architecture
 
-Phase IV extends the architecture with containerization and orchestration. Applications packaged as Docker containers, deployed on Kubernetes, managed through declarative manifests. The Web App Layer and Intelligence Layer from Phase III now run in containers with multiple replicas for scalability and resilience.
+Phase V extends the architecture with event-driven patterns using Dapr and Kafka. The Web App Layer and Intelligence Layer from Phase III now communicate asynchronously through events. Applications remain containerized (Phase IV) but add Dapr sidecars for infrastructure abstraction.
 
-**Rationale**: Containers provide consistency across environments (dev, staging, prod), isolation from host system, and portability across clouds. Kubernetes orchestration enables horizontal scaling (add more pods), self-healing (restart failed pods), zero-downtime deployments (rolling updates), and declarative infrastructure (manifests define desired state).
+**Rationale**: Event-driven architecture decouples services, enabling independent scaling, fault tolerance, and asynchronous processing. Dapr provides portable abstractions (Pub/Sub, State, Secrets) that work across any cloud provider or infrastructure. Kafka enables event streaming, event sourcing, and real-time data pipelines. Sidecar pattern separates infrastructure concerns (retries, circuit breakers, observability) from application logic.
 
 **Rules**:
-- All Phase I-III architecture rules remain in effect
-- Applications MUST be packaged as Docker containers (no bare-metal deployment)
-- Containers MUST use multi-stage builds (optimize image size)
-- Containers MUST run as non-root users (security)
-- Kubernetes MUST orchestrate all services (no manual process management)
-- Deployments MUST have 2+ replicas (enable horizontal scaling)
-- Services MUST provide stable endpoints (ClusterIP for internal, LoadBalancer for external)
-- ConfigMaps MUST store non-sensitive configuration
-- Secrets MUST store sensitive data (API keys, passwords)
-- Health checks MUST be implemented (liveness and readiness probes)
-- Resource limits MUST be defined (CPU, memory)
+- All Phase I-IV architecture rules remain in effect
+- Services MUST communicate asynchronously for non-blocking operations (task creation triggers events)
+- Synchronous HTTP calls MUST go through Dapr Service Invocation (not direct service URLs)
+- Event-driven workflows MUST use Dapr Pub/Sub (not direct Kafka clients)
+- Application code MUST NOT contain cloud-specific APIs (use Dapr abstractions)
+- Dapr sidecars MUST run alongside every application container
+- Event schemas MUST be documented and version-controlled
+- Dead letter queues MUST handle failed event processing
 
 ### II. Spec-Driven Development (NON-NEGOTIABLE)
 
-All code and infrastructure MUST be preceded by written specifications. No implementation may begin without approved spec.md, plan.md, and tasks.md files. Phase IV extends this to include containerization specs and Kubernetes deployment specs.
+All code, infrastructure, and event schemas MUST be preceded by written specifications. Phase V extends this to include event definitions, Dapr component specs, and CI/CD pipeline specs.
 
-**Rationale**: Infrastructure-as-code requires the same rigor as application code. Dockerfile and Kubernetes manifests are code and must be spec-driven. Deployment architecture decisions (resource limits, replica counts, probe configurations) have production impact and must be documented.
+**Rationale**: Event-driven systems are harder to debug than synchronous systems. Events travel through multiple services asynchronously. Without specifications, debugging becomes impossible. Dapr components (Pub/Sub, State Store) are infrastructure-as-code and must be spec-driven.
 
 **Rules**:
-- All Phase I-III spec-driven rules remain in effect
-- Spec MUST document container requirements (base images, build stages, security)
-- Spec MUST define Kubernetes architecture (deployments, services, probes)
-- Spec MUST specify resource limits (CPU, memory requests and limits)
-- Spec MUST include health check endpoints and probe configurations
-- Dockerfile changes MUST be documented in spec before implementation
-- Kubernetes manifest changes MUST be version-controlled with rationale
+- All Phase I-IV spec-driven rules remain in effect
+- Event schemas MUST be documented in spec before implementation
+- Dapr component YAML MUST be spec-driven (pubsub, statestore, secretstore)
+- Event flows MUST be documented (which service publishes, which subscribes)
+- CI/CD pipeline changes MUST be spec-driven (documented before implementation)
+- Async workflows MUST have acceptance criteria (eventual consistency documented)
 
 ### III. Test-First Development
 
-Tests MUST be written or defined before implementation code. Phase IV extends this to include container testing (image builds, container runs), Kubernetes testing (pods start, services route traffic), and deployment testing (rolling updates, rollbacks).
+Tests MUST be written or defined before implementation code. Phase V extends this to include event testing (publish/subscribe), Dapr component testing, and cloud deployment testing.
 
-**Rationale**: Infrastructure failures are harder to debug than application bugs. Container and Kubernetes tests verify deployment succeeds before production.
+**Rationale**: Event-driven systems require integration testing across services. Unit tests alone are insufficient. Dapr components must be tested in realistic environment.
 
 **Rules**:
-- All Phase I-III testing rules remain in effect
-- Container MUST be tested locally before Kubernetes deployment
-- Health check endpoints MUST be tested (return 200 OK)
-- Kubernetes pods MUST reach Running state in tests
-- Services MUST route traffic correctly in tests
-- Rolling updates MUST be tested (zero-downtime verified)
-- Resource limits MUST be tested (pods don't exceed limits)
-- Multi-replica deployment MUST be tested (load distribution)
+- All Phase I-IV testing rules remain in effect
+- Event publishing MUST be tested (message reaches topic)
+- Event subscription MUST be tested (handler processes message)
+- Dapr Pub/Sub MUST be tested (end-to-end flow)
+- Dapr State Store MUST be tested (save/retrieve state)
+- CI/CD pipeline MUST be tested (deploy succeeds)
+- Cloud deployment MUST be tested (pods reach Running state)
+- Event ordering MUST be tested if required
+- Idempotency MUST be tested (duplicate events handled)
 
 ### IV. Data Model Integrity with User Isolation and Conversation Persistence
 
-Database schema MUST maintain referential integrity, enforce user isolation, and support stateless AI conversations. Phase IV does not change data model but ensures database remains accessible from containerized applications.
+Database schema MUST maintain referential integrity, enforce user isolation, and support stateless AI conversations. Phase V adds task management fields for advanced features (priority, tags, recurring tasks, reminders).
 
-**Rationale**: External database (Neon) accessed from Kubernetes pods requires proper connection string management via Secrets.
+**Rationale**: Event-driven task management requires additional metadata. Recurring tasks need interval specification. Reminders need due dates. Priority and tags enable advanced organization.
 
 **Rules**:
-- All Phase I-III data model rules remain in effect
-- DATABASE_URL MUST be stored in Kubernetes Secret (not ConfigMap)
-- Database connections MUST use connection pooling (multiple pods)
-- Database MUST be accessible from Kubernetes cluster (network policies if needed)
+- All Phase I-IV data model rules remain in effect
+- Tasks table MUST add: `priority` (enum: Low, Medium, High)
+- Tasks table MUST add: `tags` (JSON array for multiple tags)
+- Tasks table MUST add: `due_date` (timestamp for reminders)
+- Tasks table MUST add: `is_recurring` (boolean flag)
+- Tasks table MUST add: `recurring_interval` (string: daily, weekly, monthly)
+- Database migrations MUST be version-controlled (Alembic)
+- User isolation MUST apply to all new fields (user_id foreign key)
 
 ### V. Input Validation and Error Handling
 
-All user input MUST be validated at BOTH frontend and backend. API endpoints MUST use Pydantic models for request validation. Errors MUST be handled gracefully. Phase IV adds container health check validation.
+All user input MUST be validated at BOTH frontend and backend. API endpoints MUST use Pydantic models for request validation. Errors MUST be handled gracefully. Phase V adds event validation and dead letter queue handling.
 
-**Rationale**: Kubernetes uses health checks to determine if container is healthy. Failed health checks trigger pod restarts.
+**Rationale**: Invalid events can poison message queues. Events must be validated before publishing. Failed event processing must be retried or moved to dead letter queue.
 
 **Rules**:
-- All Phase I-III validation rules remain in effect
-- Health check endpoint MUST validate critical dependencies (database connection)
-- Readiness probe MUST return 503 if dependencies unavailable
-- Container MUST fail gracefully if required environment variables missing
+- All Phase I-IV validation rules remain in effect
+- Event payloads MUST be validated with Pydantic models before publishing
+- Event handlers MUST validate messages before processing
+- Failed events MUST be retried (configurable retry policy)
+- Permanently failed events MUST go to dead letter queue
+- Event schema violations MUST be logged and alerted
 
 ### VI. Clean Code and Multi-Language Standards
 
-Code MUST follow language-specific conventions and clean code principles. Phase IV adds infrastructure-as-code standards for Dockerfiles and Kubernetes manifests.
+Code MUST follow language-specific conventions and clean code principles. Phase V adds event handler standards and Dapr component configuration standards.
 
-**Rationale**: Infrastructure code is code and must be maintainable, readable, and well-documented.
+**Rationale**: Event handlers are code and must be maintainable. Dapr components are configuration-as-code and must be documented.
 
 **Rules**:
-- All Phase I-III code quality rules remain in effect
-- Dockerfiles MUST be commented (explain each stage)
-- Kubernetes manifests MUST have metadata labels (app, version, component)
-- Helm charts MUST have values.yaml documentation
-- Infrastructure decisions MUST be documented in plan.md
+- All Phase I-IV code quality rules remain in effect
+- Event handlers MUST be idempotent (safe to process same event multiple times)
+- Event payloads MUST use strong types (Pydantic models)
+- Dapr component YAML MUST have comments explaining configuration
+- CI/CD pipeline YAML MUST have comments for each step
+- Event topics MUST have naming convention (kebab-case, noun-based)
 
 ### VII. Windows via WSL 2 or Docker Desktop
 
-Windows users MUST use either WSL 2 with Ubuntu OR Docker Desktop with Kubernetes enabled. Phase IV adds Docker Desktop as acceptable alternative since it includes Kubernetes.
-
-**Rationale**: Docker Desktop provides integrated Kubernetes on Windows, making setup easier while maintaining Linux container compatibility.
+Windows users MUST use either WSL 2 with Ubuntu OR Docker Desktop with Kubernetes enabled. Phase V unchanged.
 
 **Rules**:
-- WSL 2 rules from Phase I-III remain valid
-- OR Docker Desktop with Kubernetes enabled is acceptable
-- All containers MUST be Linux-based (not Windows containers)
-- Docker daemon MUST be accessible from command line
+- All Phase I-IV rules remain in effect
 
 ### VIII. User Isolation and Data Security
 
-Every API endpoint MUST require JWT authentication. Users MUST only access their own data. Phase IV ensures security principles apply in containerized environment with secrets management.
+Every API endpoint MUST require JWT authentication. Users MUST only access their own data. Phase V adds event-level user isolation and Dapr secret management.
 
-**Rationale**: Secrets in Kubernetes are base64-encoded (not encrypted by default). Proper secret management prevents credential exposure.
+**Rationale**: Events must carry user context. Event handlers must enforce user isolation. Dapr Secret Store provides encrypted secret management.
 
 **Rules**:
-- All Phase I-III security rules remain in effect
-- Secrets MUST be stored in Kubernetes Secret resources (not hardcoded in images)
-- Secrets MUST NOT be committed to Git (use templates)
-- Environment variables MUST be injected from Secrets/ConfigMaps at runtime
-- Container images MUST NOT contain hardcoded credentials
-
-**Production Secret Management Note**:
-For production deployments, consider enhanced secret management solutions:
-- **Sealed Secrets**: Encrypt secrets for safe Git storage (Bitnami Sealed Secrets)
-- **External Secrets Operator**: Sync secrets from external vaults (AWS Secrets Manager, HashiCorp Vault)
-- **SOPS**: Mozilla's secret encryption tool for GitOps workflows
-
-Base64 encoding is NOT encryption. Never rely on it for security.
+- All Phase I-IV security rules remain in effect
+- Events MUST include user_id in payload (for user-scoped processing)
+- Event handlers MUST enforce user isolation (verify user_id)
+- Secrets MUST be fetched via Dapr Secret Store API (not direct Kubernetes Secrets)
+- Dapr components MUST use `secretstores.kubernetes` component
+- API keys and tokens MUST NOT be in Dapr component YAML (reference secrets by name)
 
 ### IX. RESTful API Design
 
-API MUST follow RESTful conventions. Phase IV ensures API remains accessible from containers with proper service networking.
+API MUST follow RESTful conventions. Phase V adds Dapr Service Invocation for inter-service calls and maintains REST for external clients.
 
-**Rationale**: Container networking uses service names instead of localhost.
+**Rationale**: Frontend still uses REST API (browser compatibility). Backend-to-backend calls use Dapr Service Invocation for resilience and observability.
 
 **Rules**:
-- All Phase I-III REST rules remain in effect
-- Frontend in container MUST use backend service name (not localhost)
-- Service names MUST be DNS-resolvable within cluster
+- All Phase I-IV REST rules remain in effect
+- External clients (browser) MUST use REST API
+- Internal service calls MUST use Dapr Service Invocation
+- Dapr Service Invocation URL pattern: `http://localhost:3500/v1.0/invoke/<app-id>/method/<endpoint>`
+- Services MUST be registered with Dapr app-id annotation
 
 ### X. Authentication-First Approach
 
-Authentication and authorization MUST be designed and implemented BEFORE building features. Phase IV ensures auth works in containerized environment.
+Authentication and authorization MUST be designed and implemented BEFORE building features. Phase V ensures auth works across event-driven flows.
 
-**Rationale**: JWT tokens must work across container restarts and pod scaling.
+**Rationale**: Events carry user context. Authentication tokens must be validated in event handlers.
 
 **Rules**:
-- All Phase I-III auth rules remain in effect
-- BETTER_AUTH_SECRET MUST be stored in Kubernetes Secret
-- JWT verification MUST work across multiple backend replicas (stateless)
+- All Phase I-IV auth rules remain in effect
+- Event payloads MUST include authentication context (user_id)
+- Event handlers MUST validate user permissions before processing
+- JWT tokens MUST work across Dapr sidecar requests
 
 ### XI. Mobile-First Responsive Design
 
-UI MUST be responsive and functional on mobile and desktop. Phase IV does not change this.
+UI MUST be responsive and functional on mobile and desktop. Phase V unchanged.
 
 **Rules**:
-- All Phase I-III responsive design rules remain in effect
+- All Phase I-IV responsive design rules remain in effect
 
-### XII. Cloud-Native Deployment with Kubernetes Orchestration
+### XII. Cloud-Native Deployment with Production Kubernetes
 
-Application MUST be deployed on Kubernetes (Minikube for Phase IV, cloud for Phase V). All services containerized, orchestrated, and managed through declarative manifests.
+Application MUST be deployed on production-grade cloud Kubernetes (DigitalOcean DOKS, Azure AKS, or Google GKE). All services containerized, orchestrated through Kubernetes, with Dapr runtime installed cluster-wide.
 
-**Rationale**: Kubernetes is the industry standard for container orchestration. Learning Kubernetes on Minikube (local) prepares for cloud deployment (AWS EKS, GCP GKE, Azure AKS, DigitalOcean Kubernetes). Declarative infrastructure (YAML manifests) enables GitOps, version control, and reproducible deployments.
+**Rationale**: Minikube is for learning; production systems run on managed Kubernetes services. Cloud providers handle cluster upgrades, node scaling, and infrastructure reliability. Dapr installed cluster-wide (dapr-system namespace) provides runtime for all applications.
 
 **Rules**:
-- All services MUST run in Docker containers
-- Containers MUST be deployed on Kubernetes (Minikube for local)
-- Deployments MUST be defined declaratively (YAML manifests)
-- Services MUST expose applications (LoadBalancer for frontend, ClusterIP for backend)
-- ConfigMaps MUST store non-sensitive configuration
-- Secrets MUST store sensitive data (base64-encoded)
-- Namespace MUST be used (todo-app) for resource isolation
-- Resource requests and limits MUST be defined
-- Health probes MUST be configured (liveness and readiness)
-- Helm charts MUST be used for package management
-- Images MUST be tagged with specific versions (not :latest in production)
+- All Phase IV Kubernetes rules remain in effect
+- Cluster MUST be on cloud provider (DigitalOcean, Azure, or GCP - NOT Minikube)
+- Dapr MUST be installed cluster-wide (`dapr init -k`)
+- Dapr components MUST be defined (pubsub.yaml, statestore.yaml, secretstore.yaml)
+- Kafka/Redpanda MUST be deployed (Strimzi Operator or managed service)
+- Ingress controller MUST be configured (expose services externally)
+- TLS certificates MUST be provisioned (Let's Encrypt or cloud cert manager)
+- DNS MUST point to LoadBalancer IP (custom domain or cloud provider subdomain)
+- Horizontal Pod Autoscaler (HPA) SHOULD be configured (scale based on CPU/memory)
 
 ## Phase III Principles (Intelligence Layer - Still Valid)
 
-All Phase III principles (XIII-XVI) remain in effect. The Intelligence Layer (AI agent, MCP tools, chat interface) now runs in containers on Kubernetes.
+All Phase III principles (XIII-XVI) remain in effect. The Intelligence Layer (AI agent, MCP tools, chat interface) now runs in containers on cloud Kubernetes with Dapr sidecars.
 
 ### XIII. MCP-First Architecture
 
-All task operations MUST be exposed as MCP Tools. Phase IV does not change MCP architecture.
+All task operations MUST be exposed as MCP Tools. Phase V adds event publishing to MCP tool execution.
 
-**Rules**: All Phase III MCP rules remain in effect.
+**Rules**:
+- All Phase III MCP rules remain in effect
+- MCP tools MAY publish events after task operations (e.g., add_task publishes task-created event)
 
 ### XIV. Stateless AI with Database Persistence
 
-Agents MUST be stateless. Conversation history fetched from database. Phase IV emphasizes this is critical for container orchestration - pods can be killed/restarted anytime.
+Agents MUST be stateless. Conversation history stored in database. Phase V adds Dapr State Store as alternative storage for session state.
 
-**Rationale**: Stateless architecture enables Kubernetes to scale pods horizontally and restart them without data loss.
+**Rationale**: Dapr State Store provides key-value storage abstraction. Can be backed by PostgreSQL, Redis, or cloud provider state stores.
 
-**Rules**: All Phase III stateless rules remain in effect.
+**Rules**:
+- All Phase III stateless rules remain in effect
+- Chatbot session state MAY use Dapr State Store API
+- Long-term conversation history MUST remain in PostgreSQL (searchable, queryable)
 
 ### XV. Agentic Workflow
 
-Use OpenAI Agents SDK for intent recognition. No manual parsing. Phase IV unchanged.
+Use OpenAI Agents SDK for intent recognition. No manual parsing. Phase V unchanged.
 
 **Rules**: All Phase III agentic workflow rules remain in effect.
 
 ### XVI. Agent Security and Instruction Safety
 
-Agent boundaries enforced, prompt injection prevented. Phase IV unchanged.
+Agent boundaries enforced, prompt injection prevented. Phase V unchanged.
 
 **Rules**: All Phase III security rules remain in effect.
 
-## Phase IV Principles (Deployment & Infrastructure)
+## Phase IV Principles (Deployment & Infrastructure - Still Valid)
 
-### XVII. Container-First Architecture (NEW)
+All Phase IV containerization and Kubernetes principles remain in effect. Phase V builds on this foundation by adding Dapr sidecars, event-driven communication, and cloud deployment.
 
-All application components MUST be packaged as Docker containers. Containers provide isolation, consistency, and portability. Multi-stage builds MUST be used to optimize image size and security.
+### XVII. Container-First Architecture with Dapr Sidecars
 
-**Rationale**: Containers ensure "works on my machine" problems disappear. Same container image runs in dev, staging, and production. Multi-stage builds separate build-time dependencies from runtime, reducing attack surface and image size.
+All application components MUST be packaged as Docker containers with Dapr sidecars. Containers provide isolation; Dapr provides infrastructure abstraction.
 
-**Rules**:
-- Every service MUST have a Dockerfile (backend, frontend)
-- Dockerfiles MUST use multi-stage builds (minimum 2 stages: builder + runtime)
-- Base images MUST use specific versions (python:3.13-slim, node:20-alpine, NOT :latest)
-- Final stage MUST run as non-root user (create user with UID > 10000)
-- Containers MUST expose single port (8000 for backend, 3000 for frontend)
-- .dockerignore MUST exclude unnecessary files (node_modules, .git, tests)
-- Health check MUST be defined in Dockerfile (HEALTHCHECK instruction)
-- Images MUST be tagged with version (todo-backend:v1.0.0)
-- Build process MUST be documented in README
-- Images MUST be optimized (< 600MB backend, < 200MB frontend)
-
-**Multi-Stage Dockerfile Pattern**:
-```dockerfile
-# Stage 1: Dependencies
-FROM python:3.13-slim AS deps
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Stage 2: Runtime
-FROM python:3.13-slim
-RUN useradd -m -u 10001 appuser
-COPY --from=deps /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
-COPY app/ /app/
-USER appuser
-EXPOSE 8000
-HEALTHCHECK CMD curl -f http://localhost:8000/health || exit 1
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-### XVIII. Declarative Infrastructure (NEW)
-
-All infrastructure MUST be defined through declarative configuration files (Kubernetes YAML manifests, Helm charts). No manual kubectl create commands in production. Desired state defined in Git, Kubernetes reconciles actual state to match desired state.
-
-**Rationale**: Declarative infrastructure enables GitOps (Git as single source of truth), version control for infrastructure, reproducible deployments, and rollback capability. Imperative commands (kubectl run, kubectl create) are not version-controlled and cannot be audited.
+**Rationale**: Dapr sidecar pattern separates infrastructure logic (Pub/Sub, State, Secrets) from application logic. Application code remains simple HTTP calls to localhost:3500 (Dapr sidecar). Dapr handles retry logic, circuit breakers, and observability.
 
 **Rules**:
-- All Kubernetes resources MUST be defined in YAML manifests (no imperative kubectl commands)
-- Manifests MUST be stored in k8s/ directory
-- Namespace MUST be explicitly defined (not default)
-- Labels MUST be applied (app: backend, version: v1.0.0, component: api)
-- Helm charts MUST be used for templating (values.yaml for configuration)
-- Changes to infrastructure MUST go through Git (no direct kubectl edit)
-- Manifests MUST be validated before apply (kubectl apply --dry-run)
+- All Phase IV container rules remain in effect
+- Kubernetes Deployments MUST have Dapr annotations:
+  ```yaml
+  annotations:
+    dapr.io/enabled: "true"
+    dapr.io/app-id: "backend"          # Service identifier
+    dapr.io/app-port: "8000"           # Application port
+    dapr.io/log-level: "info"
+  ```
+- Containers MUST NOT include Kafka client libraries (use Dapr Pub/Sub API)
+- Containers MUST NOT access Kubernetes Secrets directly (use Dapr Secret Store API)
 
-**Manifest Pattern**:
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: backend
-  namespace: todo-app
-  labels:
-    app: backend
-    version: v1.0.0
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: backend
-  template:
-    metadata:
-      labels:
-        app: backend
-    spec:
-      containers:
-      - name: backend
-        image: todo-backend:v1.0.0
-        ports:
-        - containerPort: 8000
-```
+### XVIII. Declarative Infrastructure
 
-### XIX. Immutable Infrastructure (NEW)
+All infrastructure MUST be defined through declarative configuration files. Phase V adds Dapr components and CI/CD pipelines to declarative requirements.
 
-Containers are immutable and disposable. Once built, container images MUST NOT be modified. Updates require building new image version. Kubernetes MUST be able to kill and restart pods at any time without data loss.
-
-**Rationale**: Immutable infrastructure prevents configuration drift (production servers diverging from each other), enables safe rollbacks (just redeploy previous image), and simplifies debugging (exact image version known). Stateless pods can be killed/restarted freely, enabling self-healing and zero-downtime deployments.
+**Rationale**: Dapr components (Pub/Sub, State Store, Secret Store) are infrastructure and must be version-controlled. GitHub Actions workflows are infrastructure-as-code.
 
 **Rules**:
-- Container images MUST be immutable (no runtime modifications)
-- Configuration MUST be injected via environment variables (not baked into image)
-- Updates MUST create new image with new tag (not overwrite existing tag)
-- Pods MUST be stateless (no local file storage for user data)
-- Persistent data MUST be stored externally (database, object storage)
-- Kubernetes MUST be able to kill any pod at any time (application handles gracefully)
-- Rolling updates MUST not cause data loss (database transactions atomic)
+- All Phase IV declarative rules remain in effect
+- Dapr components MUST be defined in YAML (components/ directory)
+- CI/CD pipelines MUST be defined in .github/workflows/
+- Kafka topics MUST be created declaratively (not manual kafka-topics.sh)
+- Infrastructure changes MUST go through Git (GitOps workflow)
 
-**Immutability Pattern**:
-```bash
-# BAD: Modify running container (changes lost on pod restart)
-kubectl exec pod -- apt-get install curl
+### XIX. Immutable Infrastructure
 
-# GOOD: Update Dockerfile, rebuild image, deploy new version
-# 1. Update Dockerfile to include curl
-# 2. Build new image: docker build -t todo-backend:v1.0.1 .
-# 3. Update manifest to use v1.0.1
-# 4. Apply: kubectl apply -f deployment.yaml (rolling update)
+Containers are immutable and disposable. Phase V unchanged - extends to event handlers.
+
+**Rationale**: Event handlers are stateless functions. Pods can be killed mid-processing; events will be redelivered.
+
+**Rules**:
+- All Phase IV immutability rules remain in effect
+- Event handlers MUST be stateless (no local variables persisted across events)
+- In-flight events MUST be safe to reprocess after pod restart (idempotency)
+
+### XX. Cloud-Native Patterns and 12-Factor App
+
+Application MUST follow 12-factor app principles. Phase V emphasizes backing services (Kafka as attached resource) and concurrency (event-driven scaling).
+
+**Rules**:
+- All Phase IV 12-factor rules remain in effect
+- Kafka MUST be treated as attached resource (connection URL in env var)
+- Concurrency MUST be achieved via event partitions and consumer groups (not threads)
+
+### XXI. Health Checks and Observability
+
+All services MUST implement health check endpoints. Phase V adds Dapr observability integration (distributed tracing, metrics).
+
+**Rationale**: Dapr automatically exports metrics (Prometheus), traces (Zipkin/Jaeger), and logs. Health checks must verify Dapr sidecar is ready.
+
+**Rules**:
+- All Phase IV health check rules remain in effect
+- Health endpoint MAY check Dapr sidecar health (`http://localhost:3500/v1.0/healthz`)
+- Dapr observability MUST be enabled (Prometheus, Zipkin/Jaeger)
+- Distributed tracing MUST track events across services
+
+## Phase V Principles (Event-Driven & Cloud Deployment)
+
+### XXII. Event-Driven Architecture (NEW)
+
+Application MUST use event-driven patterns for asynchronous operations. Task creation, updates, and deletions MUST publish events. Reminders and recurring tasks MUST be triggered by events. Services MUST communicate via Dapr Pub/Sub for async workflows.
+
+**Rationale**: Event-driven architecture enables loose coupling (services don't know about each other), scalability (add consumers without changing producers), resilience (events buffered in Kafka during outages), and real-time processing (react to events as they occur). Synchronous HTTP calls block; events are fire-and-forget. Recurring tasks and reminders are inherently asynchronous and fit event-driven model.
+
+**Rules**:
+- Task CRUD operations MUST publish events to `task-events` topic
+  - Events: `task.created`, `task.updated`, `task.completed`, `task.deleted`
+- Reminder system MUST subscribe to `task-events` and publish to `reminders` topic
+- Recurring task scheduler MUST publish events based on interval
+- Event payloads MUST include: `event_type`, `user_id`, `task_id`, `timestamp`, `data`
+- Events MUST be published via Dapr Pub/Sub API (`POST http://localhost:3500/v1.0/publish/<pubsub>/<topic>`)
+- Event subscriptions MUST be registered via Dapr (`/dapr/subscribe` endpoint)
+- Event handlers MUST be idempotent (safe to process duplicate events)
+- Event processing failures MUST be logged and retried
+- Kafka topics MUST have retention policy (7 days minimum for debugging)
+
+**Event Schema Pattern**:
+```python
+# backend/app/events/schemas.py
+from pydantic import BaseModel
+from datetime import datetime
+from typing import Literal
+
+class TaskCreatedEvent(BaseModel):
+    event_type: Literal["task.created"] = "task.created"
+    user_id: int
+    task_id: int
+    timestamp: datetime
+    data: dict  # Task details
+
+# Publishing event via Dapr
+import httpx
+
+async def publish_task_created(user_id: int, task: Task):
+    event = TaskCreatedEvent(
+        user_id=user_id,
+        task_id=task.id,
+        timestamp=datetime.utcnow(),
+        data=task.dict()
+    )
+
+    async with httpx.AsyncClient() as client:
+        await client.post(
+            "http://localhost:3500/v1.0/publish/pubsub-kafka/task-events",
+            json=event.dict()
+        )
 ```
 
-**Graceful Shutdown Pattern**:
+**Event Subscription Pattern**:
 ```python
 # backend/app/main.py
-from contextlib import asynccontextmanager
-from sqlmodel.ext.asyncio.session import AsyncSession
+@app.get("/dapr/subscribe")
+async def subscribe():
+    """Dapr subscription endpoint"""
+    return [
+        {
+            "pubsubname": "pubsub-kafka",
+            "topic": "task-events",
+            "route": "/events/task-events"
+        }
+    ]
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup: Initialize resources
-    yield
-    # Shutdown: Clean up resources gracefully
-    await engine.dispose()  # Close all DB connections
-    print("Graceful shutdown complete")
-
-app = FastAPI(lifespan=lifespan)
-```
-
-Kubernetes sends SIGTERM before killing pods. Applications MUST handle this signal to close connections and complete in-flight requests within the terminationGracePeriodSeconds (default 30s).
-
-### XX. Cloud-Native Patterns and 12-Factor App (NEW)
-
-Application MUST follow 12-factor app principles: codebase in Git, dependencies declared explicitly, config in environment, backing services as attached resources, build/release/run separation, stateless processes, port binding, concurrency via process model, disposability, dev/prod parity, logs to stdout, admin processes.
-
-**Rationale**: 12-factor methodology ensures applications are cloud-native, scalable, and maintainable. These patterns are industry best practices for modern web applications.
-
-**Rules**:
-- Codebase: Single Git repo, multiple deployments
-- Dependencies: requirements.txt (Python), package.json (Node) version-locked
-- Config: All configuration via environment variables (no hardcoded values)
-- Backing Services: Database, OpenAI API treated as attached resources (URLs in env vars)
-- Build/Release/Run: Strict separation (docker build → tag → kubectl apply)
-- Processes: Stateless, share-nothing (no local sessions, conversation in database)
-- Port Binding: Apps export services via port (8000, 3000)
-- Concurrency: Scale via replicas (not threads)
-- Disposability: Fast startup, graceful shutdown
-- Dev/Prod Parity: Same containers in dev (Minikube) and prod (cloud)
-- Logs: All logs to stdout/stderr (collected by Kubernetes)
-- Admin: Admin tasks as one-off pods (kubectl run or jobs)
-
-### XXI. Health Checks and Observability (NEW)
-
-All services MUST implement health check endpoints. Kubernetes MUST monitor application health through liveness and readiness probes. Logs MUST go to stdout/stderr for Kubernetes collection.
-
-**Rationale**: Health checks enable self-healing. If container becomes unresponsive, Kubernetes automatically restarts it. Readiness probes prevent traffic to unhealthy pods. Centralized logging (Kubernetes collects from stdout) enables debugging across multiple pods.
-
-**Rules**:
-- Backend MUST implement GET /health endpoint (returns 200 OK if healthy)
-- Backend MUST implement GET /ready endpoint (returns 200 OK if ready for traffic)
-- Health endpoint MUST check critical dependencies (database connection optional)
-- Readiness endpoint MUST check ALL dependencies (database, OpenAI API if critical)
-- Liveness probe MUST be configured in Kubernetes (restart pod if fails)
-- Readiness probe MUST be configured in Kubernetes (remove from service if fails)
-- Probe initial delay MUST account for startup time (5-10 seconds)
-- All logs MUST go to stdout/stderr (no log files in container)
-- Log format MUST be structured (JSON preferred for parsing)
-
-**Backend Health Check Pattern**:
-```python
-# backend/app/main.py
-@app.get("/health")
-async def health_check():
-    """Liveness probe - is process alive?"""
+@app.post("/events/task-events")
+async def handle_task_event(event: TaskCreatedEvent):
+    """Process task events"""
+    # Idempotent processing logic
+    if event.event_type == "task.created" and event.data.get("is_recurring"):
+        # Schedule next occurrence
+        await schedule_recurring_task(event.task_id, event.data["recurring_interval"])
     return {"status": "ok"}
-
-@app.get("/ready")
-async def readiness_check():
-    """Readiness probe - ready for traffic?"""
-    # Check database connection
-    try:
-        await db.execute("SELECT 1")
-        return {"status": "ready", "database": "connected"}
-    except:
-        raise HTTPException(503, "Database unavailable")
 ```
 
-**Frontend Health Check Pattern (Next.js)**:
+### XXIII. Sidecar Pattern with Dapr Abstraction (NEW)
+
+Application code MUST NOT directly access infrastructure (Kafka, Secrets, State Storage). All infrastructure interactions MUST go through Dapr sidecar via HTTP API or Dapr SDK. Dapr handles retries, circuit breakers, and observability.
+
+**Rationale**: Dapr abstracts infrastructure. Switching from Kafka to RabbitMQ requires changing Dapr component YAML only (no application code changes). Switching from Azure to DigitalOcean requires zero code changes. Dapr provides: automatic retries, circuit breakers, distributed tracing, metrics export, secret encryption, and state management - all without application code.
+
+**Rules**:
+- Application code MUST call Dapr sidecar API (localhost:3500) for infrastructure
+- Application code MUST NOT import kafka-python, redis-py, or cloud-specific SDKs
+- Dapr SDK MAY be used for convenience (still calls localhost:3500 internally)
+- Pub/Sub MUST use Dapr API: `POST /v1.0/publish/<pubsub>/<topic>`
+- State MUST use Dapr API: `POST /v1.0/state/<store>/<key>`
+- Secrets MUST use Dapr API: `GET /v1.0/secrets/<store>/<secret>`
+- Service-to-service calls MUST use Dapr Service Invocation: `POST /v1.0/invoke/<app-id>/method/<endpoint>`
+- Dapr app-id MUST be unique per service (backend, frontend, reminder-worker)
+
+**Dapr Pub/Sub Pattern**:
+```python
+# WRONG: Direct Kafka client (tightly coupled)
+from kafka import KafkaProducer
+producer = KafkaProducer(bootstrap_servers='kafka:9092')
+producer.send('task-events', event_json)
+
+# CORRECT: Dapr Pub/Sub API (infrastructure-independent)
+import httpx
+async with httpx.AsyncClient() as client:
+    await client.post(
+        "http://localhost:3500/v1.0/publish/pubsub-kafka/task-events",
+        json=event_dict
+    )
+```
+
+**Dapr Service Invocation Pattern**:
 ```typescript
-// frontend/app/api/health/route.ts
-export async function GET() {
-  return Response.json({ status: "ok" });
-}
-
-// frontend/app/api/ready/route.ts
-export async function GET() {
-  // Check if backend API is reachable
-  try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/health`);
-    if (res.ok) {
-      return Response.json({ status: "ready", backend: "connected" });
-    }
-    return Response.json({ status: "not_ready" }, { status: 503 });
-  } catch {
-    return Response.json({ status: "not_ready", backend: "unreachable" }, { status: 503 });
-  }
-}
+// Frontend calling Backend via Dapr (resilience, retries, tracing)
+const response = await fetch(
+  "http://localhost:3500/v1.0/invoke/backend/method/api/tasks",
+  { method: "GET", headers: { "Authorization": `Bearer ${token}` } }
+);
 ```
 
-**Kubernetes Probe Configuration**:
+### XXIV. Infrastructure Independence and Portability (NEW)
+
+Application code MUST be cloud-agnostic. Code MUST NOT know if it's running on DigitalOcean, Azure, or GCP. Dapr provides portability layer. Switching cloud providers MUST require zero application code changes.
+
+**Rationale**: Vendor lock-in is expensive. Dapr components abstract infrastructure. Same application code runs on any Kubernetes cluster. Cloud-specific configurations live in Dapr component YAML, not application code.
+
+**Rules**:
+- Application code MUST NOT import cloud-specific SDKs (AWS SDK, Azure SDK, GCP SDK)
+- Application code MUST use Dapr abstractions (Pub/Sub, State, Secrets)
+- Cloud-specific configuration MUST be in Dapr component YAML only
+- Switching cloud providers MUST only require Dapr component YAML changes
+- Infrastructure provider MUST be configurable via Helm values (deployment-time choice)
+
+**Portability Example**:
 ```yaml
-livenessProbe:
-  httpGet:
-    path: /health
-    port: 8000
-  initialDelaySeconds: 10
-  periodSeconds: 30
-readinessProbe:
-  httpGet:
-    path: /ready
-    port: 8000
-  initialDelaySeconds: 5
-  periodSeconds: 10
+# Dapr pubsub component - DigitalOcean with Redpanda
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: pubsub-kafka
+spec:
+  type: pubsub.kafka
+  metadata:
+  - name: brokers
+    value: "redpanda.example.com:9092"
+
+# Same component - Azure with Event Hubs (just change metadata)
+# Application code unchanged!
+spec:
+  type: pubsub.kafka
+  metadata:
+  - name: brokers
+    value: "my-eventhub.servicebus.windows.net:9093"
 ```
 
-**Resource Limits Pattern**:
+### XXV. Automated Delivery with CI/CD (NEW)
+
+Deployments MUST be automated through CI/CD pipelines. No manual `kubectl apply` or `helm install` in production. GitHub Actions MUST build images, push to registry, and deploy to cluster on every merge to main.
+
+**Rationale**: Manual deployments are error-prone and not auditable. CI/CD ensures every deployment is tested, versioned, and rollback-capable. Automated pipelines enable continuous delivery (deploy multiple times per day safely).
+
+**Rules**:
+- Production deployments MUST go through CI/CD pipeline (no manual kubectl)
+- GitHub Actions MUST build Docker images on every commit
+- Images MUST be tagged with git commit SHA or semantic version
+- Images MUST be pushed to container registry (GitHub Container Registry, Docker Hub, or cloud registry)
+- Helm charts MUST be upgraded automatically after image push
+- Deployment MUST run automated tests before production promotion
+- Rollback MUST be automated (previous Helm release)
+- Secrets MUST be injected via GitHub Secrets (not committed)
+
+**GitHub Actions Pipeline Pattern**:
 ```yaml
-# Backend container resources
-resources:
-  requests:
-    memory: "256Mi"
-    cpu: "100m"
-  limits:
-    memory: "512Mi"
-    cpu: "500m"
+# .github/workflows/deploy.yml
+name: Deploy to Cloud
+on:
+  push:
+    branches: [main]
 
-# Frontend container resources
-resources:
-  requests:
-    memory: "128Mi"
-    cpu: "100m"
-  limits:
-    memory: "256Mi"
-    cpu: "300m"
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Backend
+        run: docker build -t ghcr.io/username/todo-backend:${{ github.sha }} ./backend
+
+      - name: Push to Registry
+        run: docker push ghcr.io/username/todo-backend:${{ github.sha }}
+
+      - name: Deploy via Helm
+        run: |
+          helm upgrade todo-app ./k8s/helm/todo-app \
+            --set backend.image.tag=${{ github.sha }} \
+            --namespace todo-app
 ```
 
-Resource requests guarantee minimum allocation; limits cap maximum usage. Pods exceeding memory limits are OOMKilled. CPU limits cause throttling. Start conservative and adjust based on monitoring.
+### XXVI. Advanced Task Management Features (NEW)
+
+Application MUST support production-grade task management: priorities, tags, due dates, recurring tasks, and reminders. These features MUST leverage event-driven architecture (not synchronous processing).
+
+**Rationale**: Users need advanced organization (priorities, tags). Recurring tasks require background scheduling. Reminders require time-based triggers. Event-driven architecture fits these async workflows naturally.
+
+**Rules**:
+- Tasks MUST support priority levels (Low, Medium, High) - filterable and sortable
+- Tasks MUST support tags (multiple per task) - searchable
+- Tasks MUST support due dates (timestamp) - reminder trigger
+- Tasks MUST support recurring intervals (daily, weekly, monthly)
+- Recurring tasks MUST auto-create next instance via events (not cron in application)
+- Reminders MUST be triggered via Dapr Jobs API (scheduled events)
+- Tag search MUST be efficient (database index on tags column)
+- Priority filtering MUST be performant (index on priority column)
+
+**Recurring Task Event Flow**:
+```
+1. User creates task with is_recurring=true, interval="daily"
+2. Backend publishes task.created event
+3. Recurring Task Scheduler (subscribes to task.created) schedules next occurrence
+4. Dapr Jobs API triggers event at scheduled time
+5. Event creates next task instance
+6. Repeat step 2-5
+```
+
+**Reminder Event Flow**:
+```
+1. User sets due_date on task
+2. Backend publishes task.updated event
+3. Reminder Service (subscribes to task.updated) schedules reminder
+4. Dapr Jobs API triggers reminder event at due_date
+5. Reminder Service publishes reminder.triggered event
+6. Frontend/Email Service handles notification
+```
+
+## Phase V Principles (Event-Driven Architecture & Cloud)
+
+### XXII. Event-Driven Architecture
+(Documented above)
+
+### XXIII. Sidecar Pattern with Dapr Abstraction
+(Documented above)
+
+### XXIV. Infrastructure Independence and Portability
+(Documented above)
+
+### XXV. Automated Delivery with CI/CD
+(Documented above)
+
+### XXVI. Advanced Task Management Features
+(Documented above)
 
 ## Scope and Constraints
 
-### In Scope (Phase IV)
-- All Phase I-III scope remains (application features unchanged)
-- Docker containerization (backend, frontend)
-- Multi-stage Dockerfile builds
-- docker-compose.yml for local orchestration
-- Kubernetes deployment on Minikube
-- Deployments with 2 replicas each
-- Services (LoadBalancer, ClusterIP)
-- ConfigMaps for configuration
-- Secrets for sensitive data
-- Health and readiness probes
-- Resource limits and requests
-- Helm chart structure
-- Rolling update strategy
-- Deployment documentation
+### In Scope (Phase V)
+- All Phase I-IV scope remains (containerized Kubernetes deployment)
+- Dapr runtime installation on cloud Kubernetes
+- Dapr components (Pub/Sub, State Store, Secret Store, Service Invocation)
+- Kafka or Redpanda deployment (event streaming)
+- Event schemas and handlers (task-events, reminders, task-updates)
+- Recurring task scheduling via events
+- Reminder system via Dapr Jobs API
+- Advanced task features (priority, tags, due dates)
+- Cloud Kubernetes deployment (DigitalOcean DOKS, Azure AKS, or GKE)
+- CI/CD pipeline (GitHub Actions)
+- Container registry integration (GHCR, Docker Hub, or cloud registry)
+- Ingress controller and TLS
+- Custom domain DNS configuration
+- Horizontal Pod Autoscaler (optional)
 
-### Out of Scope (Phase V or Future)
-- Production cloud deployment (DigitalOcean/AWS/GCP)
-- CI/CD pipelines (GitHub Actions)
-- Ingress controller and TLS certificates
-- Monitoring and logging infrastructure (Prometheus, Grafana)
-- Event-driven architecture (Kafka, Dapr)
-- Service mesh (Istio, Linkerd)
-- Auto-scaling (HPA, VPA)
-- Persistent volumes (StatefulSets)
+### Out of Scope (Future or Optional)
+- Service mesh (Istio, Linkerd) - Dapr provides sufficient abstraction
+- Monitoring infrastructure (Prometheus, Grafana) - use cloud provider monitoring
+- Persistent volumes (StatefulSets) - stateless architecture maintained
+- Multi-cluster deployment (single cloud cluster sufficient)
+- Event sourcing pattern (CQRS) - optional advanced pattern
+- Saga pattern for distributed transactions - simple workflows only
 
-### Technology Constraints (Phase IV Additions)
-- All Phase I-III constraints remain
-- Containerization: Docker, docker-compose
-- Orchestration: Kubernetes (Minikube for local)
-- Package Management: Helm 3+
-- Base Images: python:3.13-slim, node:20-alpine
-- NO Docker Swarm, Nomad, or other orchestrators
-- NO custom container runtimes (use Docker)
+### Technology Constraints (Phase V Additions)
+- All Phase I-IV constraints remain
+- Dapr Runtime: v1.12+
+- Kafka: Strimzi Operator or Redpanda Cloud (free tier)
+- Cloud Provider: DigitalOcean (DOKS), Azure (AKS), or Google Cloud (GKE)
+- CI/CD: GitHub Actions (repository-integrated)
+- Container Registry: GitHub Container Registry (GHCR) or Docker Hub
+- NO direct Kafka clients (kafka-python) - use Dapr only
+- NO cloud-specific SDKs (boto3, azure-sdk) - use Dapr abstractions
 
-## Project Structure (Phase IV Additions)
+## Project Structure (Phase V Additions)
 
-Phase IV adds deployment artifacts to the Phase I-III structure:
+Phase V adds Dapr components, CI/CD workflows, and event handlers to Phase IV structure:
 
 ```
 hackathon-full-stack-template/
 ├── backend/
-│   ├── Dockerfile                  # NEW: Multi-stage backend container
-│   ├── .dockerignore               # NEW: Exclude build context files
-│   └── ...                         # Existing backend files
+│   ├── app/
+│   │   ├── events/               # NEW: Event handlers and schemas
+│   │   │   ├── __init__.py
+│   │   │   ├── schemas.py        # Pydantic event models
+│   │   │   ├── publishers.py    # Event publishing utilities
+│   │   │   └── handlers.py       # Event subscription handlers
+│   │   └── ...
+│   ├── Dockerfile
+│   └── ...
 ├── frontend/
-│   ├── Dockerfile                  # NEW: Multi-stage frontend container
-│   ├── .dockerignore               # NEW: Exclude build context files
-│   └── ...                         # Existing frontend files
-├── docker-compose.yml              # NEW: Local orchestration
-├── k8s/                            # NEW: Kubernetes manifests
-│   ├── namespace.yaml
-│   ├── configmap.yaml
-│   ├── secret.yaml.template        # Template (actual secret not committed)
-│   ├── backend-deployment.yaml
-│   ├── backend-service.yaml
-│   ├── frontend-deployment.yaml
-│   └── frontend-service.yaml
-├── helm/                           # NEW: Helm chart
-│   └── todo-app/
-│       ├── Chart.yaml
-│       ├── values.yaml
-│       └── templates/
-│           ├── deployment.yaml
-│           └── service.yaml
-├── DEPLOYMENT.md                   # NEW: Deployment guide
-└── ...                             # Existing files
+│   ├── Dockerfile
+│   └── ...
+├── k8s/
+│   ├── helm/
+│   │   └── todo-app/
+│   │       ├── Chart.yaml
+│   │       ├── values.yaml
+│   │       └── templates/
+│   │           ├── deployment.yaml        # Updated with Dapr annotations
+│   │           └── service.yaml
+│   ├── dapr-components/           # NEW: Dapr configuration
+│   │   ├── pubsub-kafka.yaml     # Kafka Pub/Sub component
+│   │   ├── statestore.yaml        # PostgreSQL state store
+│   │   └── secretstore.yaml       # Kubernetes secret store
+│   └── kafka/                     # NEW: Kafka deployment
+│       └── strimzi/               # Strimzi Operator manifests (if self-hosted)
+├── .github/                       # NEW: CI/CD automation
+│   └── workflows/
+│       ├── deploy-backend.yml
+│       ├── deploy-frontend.yml
+│       └── test.yml
+└── ...
 ```
 
-## Development Workflow (Phase IV Additions)
+## Development Workflow (Phase V Additions)
 
-### Containerization Phase
-1. Write Dockerfiles (multi-stage) for backend and frontend
-2. Create .dockerignore files
-3. Build images locally: `docker build -t todo-backend:v1.0.0 backend/`
-4. Test containers: `docker run -p 8000:8000 todo-backend:v1.0.0`
-5. Verify health endpoints work in container
+### Event-Driven Development Phase
+1. Define event schema in spec.md
+2. Create Pydantic model in events/schemas.py
+3. Implement event publisher (after CRUD operations)
+4. Implement event handler (subscriber)
+5. Test locally with Dapr CLI: `dapr run --app-id backend --app-port 8000 -- python -m app.main`
+6. Verify event flow with `dapr logs`
 
-### Local Orchestration Phase
-1. Create docker-compose.yml
-2. Define services (frontend, backend)
-3. Configure networking
-4. Test: `docker-compose up`
-5. Verify multi-container communication
+### Dapr Setup Phase
+1. Install Dapr CLI: `curl -fsSL https://raw.githubusercontent.com/dapr/cli/master/install/install.sh | bash`
+2. Initialize Dapr on Kubernetes: `dapr init -k`
+3. Create Dapr components (pubsub, statestore, secretstore)
+4. Apply components: `kubectl apply -f k8s/dapr-components/`
+5. Verify: `dapr components -k`
 
-### Kubernetes Deployment Phase
-1. Start Minikube: `minikube start`
-2. Build images in Minikube context: `eval $(minikube docker-env)`
-3. Create namespace: `kubectl create ns todo-app`
-4. Apply ConfigMap and Secrets
-5. Apply Deployments and Services
-6. Verify pods: `kubectl get pods -n todo-app`
-7. Access application: `minikube service frontend-service -n todo-app --url`
+### Kafka Deployment Phase
+1. Choose Kafka provider:
+   - Self-hosted: Deploy Strimzi Operator
+   - Managed: Redpanda Cloud (free tier), Confluent Cloud, or cloud provider service
+2. Create topics: `task-events`, `reminders`, `task-updates`
+3. Configure Dapr Pub/Sub component with Kafka brokers
+4. Test connection: publish test event via Dapr
 
-### Helm Chart Phase
-1. Create Helm chart structure
-2. Templatize manifests
-3. Create values.yaml
-4. Install: `helm install todo-app ./helm/todo-app`
-5. Test upgrade: `helm upgrade todo-app ./helm/todo-app`
+### Cloud Deployment Phase
+1. Create cloud Kubernetes cluster (DigitalOcean, Azure, or GCP)
+2. Configure kubectl context: `kubectl config use-context <cloud-cluster>`
+3. Install Dapr on cloud cluster: `dapr init -k`
+4. Deploy Kafka (Strimzi or connect to managed service)
+5. Create Kubernetes secrets (database, API keys)
+6. Deploy Dapr components
+7. Deploy application via Helm
+8. Configure Ingress and DNS
+9. Verify pods and services
 
-## Success Criteria (Phase IV)
+### CI/CD Setup Phase
+1. Create GitHub Actions workflows
+2. Configure GitHub Secrets (registry credentials, kubeconfig)
+3. Test workflow on feature branch
+4. Merge to main triggers production deployment
+5. Monitor deployment in GitHub Actions UI
+6. Verify application accessible on public domain
 
-Phase IV is complete when ALL Phase I-III criteria remain met AND:
+## Success Criteria (Phase V)
 
-### Containerization
-- ✅ Backend Dockerfile builds successfully
-- ✅ Frontend Dockerfile builds successfully
-- ✅ Images use multi-stage builds (optimized size)
-- ✅ Containers run as non-root users
-- ✅ Health check endpoints implemented and working
-- ✅ docker-compose brings up full stack locally
-- ✅ .dockerignore files exclude unnecessary files
+Phase V is complete when ALL Phase I-IV criteria remain met AND:
 
-### Kubernetes Deployment
-- ✅ Minikube cluster operational
-- ✅ Namespace created (todo-app)
-- ✅ ConfigMap applied with non-sensitive config
-- ✅ Secrets applied with sensitive data
-- ✅ Backend deployment created with 2 replicas
-- ✅ Frontend deployment created with 2 replicas
-- ✅ Backend service (ClusterIP) routing traffic
-- ✅ Frontend service (LoadBalancer) accessible externally
-- ✅ All pods in Running state
-- ✅ Health probes configured and passing
-- ✅ Resource limits defined (CPU, memory)
+### Event-Driven Architecture
+- ✅ Dapr runtime installed on cloud Kubernetes cluster
+- ✅ Dapr sidecars running alongside frontend and backend pods
+- ✅ Kafka or Redpanda deployed and accessible
+- ✅ Dapr Pub/Sub component configured (pubsub-kafka)
+- ✅ Dapr State Store component configured (PostgreSQL)
+- ✅ Dapr Secret Store component configured (Kubernetes secrets)
+- ✅ Event schemas defined (task.created, task.updated, etc.)
+- ✅ Event publishers implemented (task CRUD publishes events)
+- ✅ Event subscribers implemented (handlers process events)
+- ✅ End-to-end event flow tested (publish → Kafka → subscribe → process)
+
+### Advanced Task Features
+- ✅ Priority field added to tasks (Low, Medium, High)
+- ✅ Tags field added to tasks (JSON array)
+- ✅ Due date field added to tasks (timestamp)
+- ✅ Recurring task fields added (is_recurring, recurring_interval)
+- ✅ Recurring tasks auto-create next instance via events
+- ✅ Reminders triggered via Dapr Jobs API
+- ✅ Priority filtering works in UI
+- ✅ Tag search works in UI
+- ✅ Database indexes created (priority, tags, due_date)
+
+### Cloud Deployment
+- ✅ Application deployed on cloud Kubernetes (DigitalOcean, Azure, or GCP)
+- ✅ Dapr components deployed and working
+- ✅ Kafka/Redpanda deployed and accessible
+- ✅ Ingress controller configured
+- ✅ TLS certificates provisioned (HTTPS working)
+- ✅ Custom domain DNS configured (or cloud provider subdomain)
+- ✅ All pods in Running state on cloud cluster
+- ✅ LoadBalancer has public IP
+- ✅ Application accessible from internet
+
+### CI/CD Automation
+- ✅ GitHub Actions workflows created
+- ✅ Workflow builds Docker images on commit
+- ✅ Images tagged with git SHA or version
+- ✅ Images pushed to container registry
+- ✅ Helm chart upgraded automatically
+- ✅ Deployment succeeds without manual intervention
+- ✅ Pipeline runs on every merge to main
+- ✅ Failed deployments alert (GitHub notifications)
+
+### Observability
+- ✅ Dapr metrics exported (Prometheus endpoint)
+- ✅ Distributed tracing working (Zipkin or Jaeger)
+- ✅ Logs aggregated (cloud provider logging or ELK stack)
+- ✅ Event processing visible in traces
+- ✅ Failed events logged to dead letter queue
 
 ### Application Functionality
-- ✅ All Phase I-III features work in Kubernetes
-- ✅ User can signup/signin through LoadBalancer
-- ✅ User can create/view/update/delete tasks
-- ✅ AI chatbot works in containerized environment
-- ✅ Database connection works from pods
-- ✅ OpenAI API accessible from backend pods
-
-### Helm Charts
-- ✅ Helm chart structure created
-- ✅ Chart.yaml with metadata
-- ✅ values.yaml with parameterized config
-- ✅ Templates for all resources
-- ✅ Helm install succeeds
-- ✅ Helm upgrade works (rolling update)
-
-### Testing
-- ✅ Container builds tested (no errors)
-- ✅ Container runs tested (starts successfully)
-- ✅ Pod deployment tested (reaches Running state)
-- ✅ Service routing tested (traffic reaches pods)
-- ✅ Health probes tested (return correct status)
-- ✅ Rolling update tested (zero downtime)
-- ✅ Pod restart tested (application recovers)
-- ✅ Multi-replica load balancing tested
+- ✅ All Phase I-IV features work on cloud
+- ✅ User signup/signin works on public domain
+- ✅ Task CRUD operations work and publish events
+- ✅ AI chatbot works with cloud deployment
+- ✅ Recurring tasks create next instance automatically
+- ✅ Reminders trigger at due date
+- ✅ Priority and tag filtering works
+- ✅ OAuth authentication works with cloud URLs
 
 ### Documentation
-- ✅ DEPLOYMENT.md created with setup instructions
-- ✅ Dockerfile comments explain each stage
-- ✅ Kubernetes manifests have resource descriptions
-- ✅ Helm values.yaml documented
-- ✅ Troubleshooting guide included
-- ✅ Architecture diagram updated with K8s components
+- ✅ Dapr architecture diagram created
+- ✅ Event flow diagrams documented
+- ✅ Deployment guide updated for cloud providers
+- ✅ CI/CD pipeline documented
+- ✅ Troubleshooting guide includes event debugging
+- ✅ README updated with Phase V architecture
 
 ## Governance
 
@@ -702,7 +827,7 @@ Constitution changes MUST be documented with:
 - Approval before taking effect
 
 ### Version Semantics
-- MAJOR: Principle removal, fundamental architectural change (e.g., Phase III → Phase IV deployment shift)
+- MAJOR: Principle removal, fundamental architectural change (Phase IV → Phase V: synchronous → event-driven)
 - MINOR: New principle added, significant expansion
 - PATCH: Clarifications, examples, formatting
 
@@ -710,21 +835,26 @@ Constitution changes MUST be documented with:
 - All spec.md files MUST reference relevant constitution principles
 - All plan.md files MUST include "Constitution Check" section
 - All code reviews MUST verify constitutional compliance
-- Infrastructure changes MUST comply with deployment principles (XVII-XXI)
+- Infrastructure changes MUST comply with deployment principles (XII, XVII-XXVI)
+- Event schemas MUST be reviewed for compliance with Principle XXII
 
-### Compliance Review Checklist (Phase IV Additions)
-Before marking Phase IV complete, verify:
-- [ ] All services containerized with Dockerfiles (Principle XVII)
-- [ ] Multi-stage builds used (Principle XVII)
-- [ ] Kubernetes manifests declarative (Principle XVIII)
-- [ ] Containers immutable (Principle XIX)
-- [ ] 12-factor principles followed (Principle XX)
-- [ ] Health endpoints implemented (Principle XXI)
-- [ ] Liveness and readiness probes configured (Principle XXI)
-- [ ] ConfigMaps and Secrets used (Principle XVIII)
-- [ ] Resource limits defined (Principle XVIII)
-- [ ] Helm chart created (Principle XVIII)
-- [ ] All Phase I-III features work in Kubernetes
-- [ ] No secrets committed to Git (Principle VIII)
+### Compliance Review Checklist (Phase V Additions)
+Before marking Phase V complete, verify:
+- [ ] All Phase IV compliance items (containers, Kubernetes, health checks)
+- [ ] Dapr installed on cloud cluster (Principle XXIII)
+- [ ] Dapr sidecars running (Principle XXIII)
+- [ ] Dapr components deployed (Principle XXII)
+- [ ] Kafka/Redpanda deployed (Principle XXII)
+- [ ] Event schemas documented (Principle II)
+- [ ] Event publishers implemented (Principle XXII)
+- [ ] Event subscribers implemented (Principle XXII)
+- [ ] Application uses Dapr APIs only (Principle XXIII)
+- [ ] No cloud-specific SDKs in code (Principle XXIV)
+- [ ] CI/CD pipeline working (Principle XXV)
+- [ ] Automated deployments tested (Principle XXV)
+- [ ] Advanced task features working (Principle XXVI)
+- [ ] Application accessible on public domain
+- [ ] TLS certificates valid
+- [ ] No secrets in Git or container images
 
-**Version**: 4.1.0 | **Ratified**: 2025-12-17 | **Last Amended**: 2025-12-24
+**Version**: 5.0.0 | **Ratified**: 2025-12-17 | **Last Amended**: 2025-12-25
