@@ -29,3 +29,8 @@ if ADMIN_EMAIL and ADMIN_PASSWORD:
     # Auto-add admin email to ADMIN_EMAILS list if not already present
     if ADMIN_EMAIL not in ADMIN_EMAILS:
         ADMIN_EMAILS.append(ADMIN_EMAIL)
+
+# Frontend URL for OAuth redirects
+# Falls back to the first allowed origin or localhost
+_allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+FRONTEND_URL = os.getenv("FRONTEND_URL", _allowed_origins[0].strip())

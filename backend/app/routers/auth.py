@@ -11,7 +11,7 @@ from app.database import get_session
 from app.models import User
 from app.schemas import SignupRequest, SigninRequest, TokenResponse, UserResponse, MessageResponse
 from app.auth import generate_jwt
-from app.config import ADMIN_EMAILS
+from app.config import ADMIN_EMAILS, FRONTEND_URL
 from app.oauth import (
     oauth,
     generate_state_token,
@@ -319,9 +319,8 @@ async def google_callback(
         )
 
         # Redirect to frontend with token
-        frontend_url = "http://localhost:3000"
         return RedirectResponse(
-            url=f"{frontend_url}/auth/callback?token={jwt_token}&provider=google"
+            url=f"{FRONTEND_URL}/auth/callback?token={jwt_token}&provider=google"
         )
 
     except HTTPException:
@@ -507,9 +506,8 @@ async def github_callback(
         )
 
         # Redirect to frontend with token
-        frontend_url = "http://localhost:3000"
         return RedirectResponse(
-            url=f"{frontend_url}/auth/callback?token={jwt_token}&provider=github"
+            url=f"{FRONTEND_URL}/auth/callback?token={jwt_token}&provider=github"
         )
 
     except HTTPException:
