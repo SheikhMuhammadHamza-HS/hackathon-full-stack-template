@@ -400,6 +400,6 @@ After completing quickstart setup:
 3. **Test each task** - Verify acceptance criteria before moving to next
 4. **Manual testing** - Try natural language commands, verify behavior
 5. **Multi-user testing** - Create 2+ users, verify isolation
-6. **Deploy** - Update Railway/Vercel with new environment variables
+6. **Deploy** - Update Render/Vercel with new environment variables
 
 Phase III implementation estimated at 15-20 tasks total.

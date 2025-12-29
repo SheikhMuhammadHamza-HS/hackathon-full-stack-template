@@ -223,7 +223,7 @@ This project follows **Spec-Driven Development (SDD)**:
 
 See `specs/001-user-auth/quickstart.md` Section 15 for production deployment:
 - **Frontend**: Vercel
-- **Backend**: Railway or Render
+- **Backend**: Render
 - **Database**: Neon (already cloud-hosted)
 
 ## 📝 License

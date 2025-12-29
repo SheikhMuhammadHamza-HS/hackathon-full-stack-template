@@ -21,7 +21,7 @@ Implement conversational AI interface for task management using OpenAI Agents SD
 **Primary Dependencies**: OpenAI Agents SDK, Official MCP SDK, ChatKit React, FastAPI, SQLModel, Next.js 16, React 19
 **Storage**: Neon Serverless PostgreSQL (extend with conversations and messages tables)
 **Testing**: Manual testing via chat interface, curl for API testing, multi-user isolation testing
-**Target Platform**: Cloud deployment (Railway/Render backend, Vercel frontend, Neon database)
+**Target Platform**: Cloud deployment (Render backend, Vercel frontend, Neon database)
 **Project Type**: Web application (monorepo with backend/ and frontend/)
 **Performance Goals**: P95 response time < 3 seconds, conversation history fetch < 500ms, message save < 200ms
 **Constraints**: Stateless architecture (no in-memory state), user isolation enforced, rate limit 20 messages/minute per user

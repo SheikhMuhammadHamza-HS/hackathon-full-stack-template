@@ -80,7 +80,7 @@ Implement a complete authentication system for Phase II full-stack web applicati
 
 ### Principle XII: Cloud-Native Deployment ✅
 - **Status**: PASS
-- **Evidence**: Environment variables for all secrets (BETTER_AUTH_SECRET, DATABASE_URL). HTTPS in production. No file system dependencies. Stateless backend enables horizontal scaling. Vercel (frontend), Railway/Render (backend), Neon (database).
+- **Evidence**: Environment variables for all secrets (BETTER_AUTH_SECRET, DATABASE_URL). HTTPS in production. No file system dependencies. Stateless backend enables horizontal scaling. Vercel (frontend), Render (backend), Neon (database).
 
 **Overall Gate Status**: ✅ **PASSED** - All 12 constitutional principles satisfied. No violations requiring justification.
 
@@ -163,7 +163,7 @@ CLAUDE.md                          # Claude Code instructions (updated for Phase
 docker-compose.yml                 # Optional local development setup
 ```
 
-**Structure Decision**: Web application monorepo selected based on Phase II requirements. Frontend and backend are separate services but share same repository for coordinated development. Frontend deployed on Vercel, backend on Railway/Render, database on Neon. Clear separation of concerns while maintaining single source of truth for specifications and documentation.
+**Structure Decision**: Web application monorepo selected based on Phase II requirements. Frontend and backend are separate services but share same repository for coordinated development. Frontend deployed on Vercel, backend on Render, database on Neon. Clear separation of concerns while maintaining single source of truth for specifications and documentation.
 
 ## Complexity Tracking
 
@@ -408,7 +408,7 @@ ALLOWED_ORIGINS=http://localhost:3000,https://yourdomain.vercel.app
 - Multi-user testing confirms zero cross-user data access
 - Responsive testing passes on mobile (375px) and desktop (1024px+)
 - All 12 success criteria from spec.md satisfied
-- Frontend deployed on Vercel, backend on Railway/Render, database on Neon
+- Frontend deployed on Vercel, backend on Render, database on Neon
 
 ---
 

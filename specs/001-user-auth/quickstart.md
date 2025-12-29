@@ -416,7 +416,7 @@ DATABASE_URL=postgresql://user:password@ep-xxx.us-east-2.aws.neon.tech/neondb?ss
 **Security Notes**:
 - `.env` and `.env.local` MUST be in `.gitignore` (never commit secrets)
 - Use different secrets for development vs production
-- Store production secrets in deployment platform (Vercel, Railway secrets management)
+- Store production secrets in deployment platform (Vercel, Render secrets management)
 
 ---
 
@@ -615,19 +615,21 @@ python -c "import jwt; print(jwt.decode('your-token-here', options={'verify_sign
 
 ## 14. Production Deployment
 
-### 14.1 Deploy Backend (Railway/Render)
+### 14.1 Deploy Backend (Render)
 ```bash
-# 1. Create Railway/Render account
+# 1. Create Render account at https://render.com
 # 2. Connect GitHub repository
-# 3. Configure environment variables:
+# 3. Create new Web Service with:
+#    - Build command: pip install uv && uv sync
+#    - Start command: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+# 4. Configure environment variables:
 DATABASE_URL=<neon-production-connection-string>
 BETTER_AUTH_SECRET=<production-secret-different-from-dev>
 ALLOWED_ORIGINS=https://your-app.vercel.app
-
-# 4. Deploy backend
-# Railway: Auto-deploys on git push
-# Render: Configure build command: uv sync
-#         Configure start command: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+OPENAI_API_KEY=<your-openai-api-key>
+ADMIN_EMAILS=<admin-email>
+ADMIN_EMAIL=<admin-email>
+ADMIN_PASSWORD=<secure-admin-password>
 ```
 
 ### 14.2 Deploy Frontend (Vercel)
@@ -641,7 +643,7 @@ vercel
 
 # 3. Configure environment variables in Vercel Dashboard:
 BETTER_AUTH_SECRET=<same-as-backend>
-NEXT_PUBLIC_API_URL=<backend-railway-url>
+NEXT_PUBLIC_API_URL=<backend-render-url>
 NEXT_PUBLIC_BETTER_AUTH_URL=<vercel-url>/api/auth
 DATABASE_URL=<neon-production-connection-string>
 
@@ -652,14 +654,14 @@ vercel --prod
 ### 14.3 Update CORS for Production
 ```bash
 # Update backend ALLOWED_ORIGINS for production
-# Railway/Render Environment Variables:
+# Render Environment Variables:
 ALLOWED_ORIGINS=https://your-app.vercel.app,https://your-app-preview.vercel.app
 ```
 
 ### 14.4 Test Production Deployment
 ```bash
 # Test signup on production
-curl -X POST https://your-backend.railway.app/api/auth/signup \
+curl -X POST https://your-backend.onrender.com/api/auth/signup \
   -H "Content-Type: application/json" \
   -d '{"name":"Prod User","email":"prod@example.com","password":"password123"}'
 
@@ -678,7 +680,7 @@ curl -X POST https://your-backend.railway.app/api/auth/signup \
 4. ⏳ Run `/sp.tasks` to generate implementation tasks
 5. ⏳ Implement task endpoints (CRUD operations with JWT protection)
 6. ⏳ Build frontend UI (task list, task form, responsive layout)
-7. ⏳ Deploy to production (Vercel + Railway + Neon)
+7. ⏳ Deploy to production (Vercel + Render + Neon)
 8. ⏳ Create demo video
 
 ---

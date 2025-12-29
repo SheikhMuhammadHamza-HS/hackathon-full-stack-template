@@ -45,7 +45,7 @@ Phase I (Console App) is complete. Now transitioning to Phase II: Full-Stack Web
 - Backend: Python FastAPI
 - Database: Neon Serverless PostgreSQL
 - Multi-user with Better Auth (JWT)
-- Deployed on cloud (Vercel + Railway/Render)
+- Deployed on cloud (Vercel + Render)
 
 ### Architecture Changes
 **Phase I:** Simple console interface → in-memory storage
@@ -184,7 +184,7 @@ Constitution successfully updated from version 1.0.0 to 2.0.0 (MAJOR version cha
 
 3. **Scope Redefined**: Now includes full-stack architecture, multi-user auth, persistent database, REST API, responsive UI, and cloud deployment.
 
-4. **Technology Constraints Expanded**: Added Next.js, FastAPI, SQLModel, Alembic, Better Auth, Vercel, Railway/Render, Neon PostgreSQL.
+4. **Technology Constraints Expanded**: Added Next.js, FastAPI, SQLModel, Alembic, Better Auth, Vercel, Render, Neon PostgreSQL.
 
 5. **Project Structure Updated**: Monorepo structure with frontend/ and backend/ directories, shared specs/ and history/.
 

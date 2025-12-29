@@ -473,7 +473,7 @@ async def fetch_conversation_history(conversation_id: int, user_id: str, session
 ### Infrastructure
 - **Database**: Neon PostgreSQL (extend with 2 new tables)
 - **AI Model**: GPT-4o (OpenAI API)
-- **Deployment**: Railway (backend), Vercel (frontend) - existing from Phase II
+- **Deployment**: Render (backend), Vercel (frontend) - existing from Phase II
 
 ### Development Tools
 - **Alembic**: Migration generation and application

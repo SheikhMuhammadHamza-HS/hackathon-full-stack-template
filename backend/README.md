@@ -252,7 +252,7 @@ uv sync
 
 ## Production Deployment
 
-See `specs/001-user-auth/quickstart.md` for production deployment instructions (Railway, Render, or Docker).
+See `specs/001-user-auth/quickstart.md` for production deployment instructions (Render or Docker).
 
 ## Contributing
 

@@ -324,7 +324,7 @@ fetch('/api/endpoint', {
 - FastAPI provides built-in CORS middleware
 - Environment variables enable different configs for development vs production
 - Explicit origin whitelist prevents unauthorized domains from making requests
-- Required for frontend (Vercel) to call backend API (Railway/Render)
+- Required for frontend (Vercel) to call backend API (Render)
 
 **Implementation Approach**:
 ```python
@@ -353,7 +353,7 @@ app.add_middleware(
 # Development (.env)
 ALLOWED_ORIGINS=http://localhost:3000
 
-# Production (.env on Railway/Render)
+# Production (.env on Render)
 ALLOWED_ORIGINS=https://your-app.vercel.app,https://your-app-preview.vercel.app
 ```
 
