@@ -21,6 +21,7 @@ from app.models import Task
 from app.schemas import TaskCreate, TaskUpdate, TaskResponse, TaskPriority, RecurringInterval
 # Phase V: Dapr Pub/Sub event publishing
 from app.events.publisher import publish_event
+from sqlalchemy import func
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,24 @@ async def _validate_user_access(user_id: str, authenticated_user: str) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this resource"
         )
+
+
+async def _get_next_task_number(session: AsyncSession, user_id: str) -> int:
+    """
+    Get the next task_number for a user (max + 1, or 1 if no tasks).
+
+    Args:
+        session: Database session
+        user_id: User ID to get next task number for
+
+    Returns:
+        int: Next task_number (1 for first task, max+1 otherwise)
+    """
+    result = await session.execute(
+        select(func.max(Task.task_number)).where(Task.user_id == user_id)
+    )
+    max_number = result.scalar_one_or_none()
+    return (max_number or 0) + 1
 
 
 async def _get_user_task(
@@ -206,6 +225,7 @@ async def get_tasks(
         for task in tasks:
             task_dict = {
                 "id": task.id,
+                "task_number": task.task_number,
                 "user_id": task.user_id,
                 "title": task.title,
                 "description": task.description,
@@ -278,9 +298,13 @@ async def create_task(
             else:
                 due_date_normalized = task_data.due_date
 
+        # Get next task_number for this user
+        next_task_number = await _get_next_task_number(session, authenticated_user)
+
         # Create task with authenticated_user as owner and all new fields
         task = Task(
             user_id=authenticated_user,  # Use JWT user_id, not URL user_id
+            task_number=next_task_number,  # User-specific task number
             title=task_data.title,
             description=task_data.description,
             completed=False,
@@ -318,6 +342,7 @@ async def create_task(
         # Parse tags JSON string to list for response
         response_data = {
             "id": task.id,
+            "task_number": task.task_number,
             "user_id": task.user_id,
             "title": task.title,
             "description": task.description,
@@ -467,6 +492,7 @@ async def update_task(
         # Parse tags JSON string to list for response
         response_data = {
             "id": task.id,
+            "task_number": task.task_number,
             "user_id": task.user_id,
             "title": task.title,
             "description": task.description,
@@ -624,6 +650,7 @@ async def toggle_task_completion(
         # Parse tags JSON string to list for response
         response_data = {
             "id": task.id,
+            "task_number": task.task_number,
             "user_id": task.user_id,
             "title": task.title,
             "description": task.description,

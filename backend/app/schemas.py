@@ -206,8 +206,12 @@ class TaskResponse(BaseModel):
     """Response schema for task data.
 
     Implements: T002 - Advanced task fields in response
+
+    Note: task_number is the user-specific ID (1, 2, 3...) shown to users.
+          id is the global database ID used internally.
     """
     id: int
+    task_number: int  # User-specific task number (starts from 1 per user)
     user_id: str
     title: str
     description: Optional[str]

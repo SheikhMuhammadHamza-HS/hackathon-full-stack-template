@@ -22,6 +22,16 @@ class TodoContext:
     session: AsyncSession
 
 
+async def get_next_task_number(session: AsyncSession, user_id: str) -> int:
+    """Get the next task_number for a user (max + 1, or 1 if no tasks)."""
+    from sqlalchemy import func
+    result = await session.execute(
+        select(func.max(Task.task_number)).where(Task.user_id == user_id)
+    )
+    max_number = result.scalar_one_or_none()
+    return (max_number or 0) + 1
+
+
 @function_tool
 async def add_task(
     ctx: RunContextWrapper[TodoContext],
@@ -52,8 +62,12 @@ async def add_task(
         return json.dumps({"success": False, "error": "Description must be under 1000 characters"})
 
     try:
+        # Get next task_number for this user
+        next_number = await get_next_task_number(session, user_id)
+
         task = Task(
             user_id=user_id,
+            task_number=next_number,
             title=title,
             description=description.strip() if description else None,
             completed=False,
@@ -68,7 +82,7 @@ async def add_task(
         result = {
             "success": True,
             "task": {
-                "id": task.id,
+                "id": task.task_number,  # Show task_number as "id" to user
                 "title": task.title,
                 "description": task.description,
                 "completed": task.completed,
@@ -113,7 +127,8 @@ async def list_tasks(
         elif filter == "completed":
             query = query.where(Task.completed == True)
 
-        query = query.order_by(Task.created_at.desc())
+        # Order by task_number for consistent display
+        query = query.order_by(Task.task_number.asc())
 
         result = await session.execute(query)
         tasks = result.scalars().all()
@@ -122,7 +137,7 @@ async def list_tasks(
             "success": True,
             "tasks": [
                 {
-                    "id": t.id,
+                    "id": t.task_number,  # Show task_number as "id" to user
                     "title": t.title,
                     "description": t.description,
                     "completed": t.completed,
@@ -146,7 +161,7 @@ async def complete_task(
     """Mark a task as complete.
 
     Args:
-        task_id: ID of the task to complete
+        task_id: Task number to complete (user's task #1, #2, etc.)
 
     Returns:
         JSON string with success/error status
@@ -158,8 +173,9 @@ async def complete_task(
         return json.dumps({"success": False, "error": "Invalid task ID"})
 
     try:
+        # Lookup by task_number (user-specific) instead of global id
         result = await session.execute(
-            select(Task).where(Task.id == task_id, Task.user_id == user_id)
+            select(Task).where(Task.task_number == task_id, Task.user_id == user_id)
         )
         task = result.scalar_one_or_none()
 
@@ -177,7 +193,7 @@ async def complete_task(
         response = {
             "success": True,
             "task": {
-                "id": task.id,
+                "id": task.task_number,  # Show task_number as "id" to user
                 "title": task.title,
                 "completed": task.completed,
                 "updated_at": task.updated_at.isoformat()
@@ -201,7 +217,7 @@ async def delete_task(
     """Delete a task permanently.
 
     Args:
-        task_id: ID of the task to delete
+        task_id: Task number to delete (user's task #1, #2, etc.)
 
     Returns:
         JSON string with success/error status
@@ -213,8 +229,9 @@ async def delete_task(
         return json.dumps({"success": False, "error": "Invalid task ID"})
 
     try:
+        # Lookup by task_number (user-specific) instead of global id
         result = await session.execute(
-            select(Task).where(Task.id == task_id, Task.user_id == user_id)
+            select(Task).where(Task.task_number == task_id, Task.user_id == user_id)
         )
         task = result.scalar_one_or_none()
 
@@ -222,12 +239,13 @@ async def delete_task(
             return json.dumps({"success": False, "error": f"Task {task_id} not found"})
 
         title = task.title
+        task_num = task.task_number
         await session.delete(task)
         await session.commit()
 
         response = {
             "success": True,
-            "task_id": task_id,
+            "task_id": task_num,  # Return task_number
             "title": title,
             "message": "Task deleted successfully"
         }
@@ -247,7 +265,7 @@ async def update_task(
     """Update a task's title or description.
 
     Args:
-        task_id: ID of the task to update
+        task_id: Task number to update (user's task #1, #2, etc.)
         title: New title (optional, 1-200 characters)
         description: New description (optional, max 1000 characters)
 
@@ -279,8 +297,9 @@ async def update_task(
         return json.dumps({"success": False, "error": "Description must be under 1000 characters"})
 
     try:
+        # Lookup by task_number (user-specific) instead of global id
         result = await session.execute(
-            select(Task).where(Task.id == task_id, Task.user_id == user_id)
+            select(Task).where(Task.task_number == task_id, Task.user_id == user_id)
         )
         task = result.scalar_one_or_none()
 
@@ -301,7 +320,7 @@ async def update_task(
         response = {
             "success": True,
             "task": {
-                "id": task.id,
+                "id": task.task_number,  # Show task_number as "id" to user
                 "title": task.title,
                 "description": task.description,
                 "completed": task.completed,

@@ -354,7 +354,8 @@ With multiple developers:
 | Phase 7: US4 (Delete) | 3 | P3 |
 | Phase 8: US5 (Update) | 3 | P3 |
 | Phase 9: Polish | 19 | Final |
-| **Total** | **61** | |
+| Phase 10: Task Numbering | 12 | P1 |
+| **Total** | **73** | |
 
 ### Per User Story Task Count
 
@@ -377,6 +378,46 @@ With multiple developers:
 **Full P1 Features**: Phases 1-5 (31 tasks)
 - Adds task viewing and conversation persistence
 - Complete conversational task management experience
+
+---
+
+## Phase 10: User-Specific Task Numbering (Priority: P1)
+
+**Goal**: Each user's tasks are numbered independently (1, 2, 3...) instead of using global database IDs
+
+**Problem Solved**: Previously, if User 1 created 3 tasks (IDs 1, 2, 3), User 2's first task would get ID 4. Now each user starts from 1.
+
+**Independent Test**: User 2 creates their first task, it gets task_number=1 (not a high global ID)
+
+### Database Changes
+
+- [x] T062 Add task_number column to Task model in backend/app/models.py
+- [x] T063 Create Alembic migration for task_number with per-user sequential numbering
+- [x] T064 Migration populates existing tasks with sequential task_number per user
+
+### Backend Implementation
+
+- [x] T065 Update backend/app/schemas.py TaskResponse to include task_number field
+- [x] T066 Add _get_next_task_number helper function in backend/app/routers/tasks.py
+- [x] T067 Update create_task endpoint to assign task_number when creating tasks
+- [x] T068 Update all task response builders to include task_number in response
+
+### AI Tools Update
+
+- [x] T069 Update add_task tool to assign task_number using get_next_task_number helper
+- [x] T070 Update list_tasks tool to return task_number instead of global id
+- [x] T071 Update complete_task tool to lookup by task_number instead of id
+- [x] T072 Update delete_task tool to lookup by task_number instead of id
+- [x] T073 Update update_task tool to lookup by task_number instead of id
+
+**Checkpoint**: Chatbot uses user-specific task numbers
+
+**Manual Test**:
+1. Create User A and add 3 tasks via chat → Tasks should be #1, #2, #3
+2. Create User B and add 1 task via chat → Task should be #1 (not #4)
+3. User A types "Show my tasks" → See tasks #1, #2, #3
+4. User B types "Complete task 1" → Only User B's task #1 is affected
+5. User A's tasks remain unchanged
 
 ---
 

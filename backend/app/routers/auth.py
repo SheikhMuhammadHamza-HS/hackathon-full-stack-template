@@ -11,7 +11,7 @@ from app.database import get_session
 from app.models import User
 from app.schemas import SignupRequest, SigninRequest, TokenResponse, UserResponse, MessageResponse
 from app.auth import generate_jwt
-from app.config import ADMIN_EMAILS, ADMIN_CREDENTIALS
+from app.config import ADMIN_EMAILS
 from app.oauth import (
     oauth,
     generate_state_token,

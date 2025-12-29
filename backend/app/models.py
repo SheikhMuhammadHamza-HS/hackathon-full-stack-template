@@ -43,6 +43,11 @@ class Task(SQLModel, table=True):
     Phase V: Extended with advanced task management fields (priority, tags, due dates, recurring).
     All queries MUST filter by authenticated user_id.
 
+    Task Numbering:
+        - task_number: User-specific sequential number (1, 2, 3... per user)
+        - id: Global database ID (used internally)
+        - Chatbot and UI should display task_number, not id
+
     Advanced Features:
         - priority: Task priority level (low, medium, high)
         - tags: JSON array of tags for categorization
@@ -54,6 +59,7 @@ class Task(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: str = Field(foreign_key="users.id", index=True)
+    task_number: int = Field(default=1, index=True)  # User-specific task number (starts from 1)
     title: str = Field(min_length=1, max_length=200)
     description: Optional[str] = Field(default=None, max_length=1000)
     completed: bool = Field(default=False)

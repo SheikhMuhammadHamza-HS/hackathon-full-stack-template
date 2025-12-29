@@ -186,12 +186,21 @@ curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
 
 ## Admin Configuration
 
-Edit `backend/app/config.py` to add admin emails:
-```python
-ADMIN_EMAILS = [
-    "sheikhmhamza37@gmail.com",  # Your admin email
-]
+Configure admin access via environment variables in your `.env` file:
+
+```bash
+# Comma-separated list of emails with admin privileges
+ADMIN_EMAILS=admin@example.com,other-admin@example.com
+
+# Admin credentials (for initial admin user)
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=YourSecurePassword123!
 ```
+
+**Security Notes:**
+- Never hardcode admin credentials in source code
+- Use strong passwords (8+ chars with uppercase, lowercase, digit)
+- Keep `.env` file out of version control (already in `.gitignore`)
 
 Admin users can access `/api/admin/*` endpoints after authentication.
 
