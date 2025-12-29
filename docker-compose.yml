@@ -1,0 +1,74 @@
+# =============================================================================
+# Docker Compose - Local Development & Testing
+# =============================================================================
+# Run the full stack locally with: docker-compose up --build
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Backend - FastAPI Application
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: todo-backend
+    ports:
+      - "8000:8000"
+    environment:
+      # Database - Use your Neon PostgreSQL URL
+      - DATABASE_URL=${DATABASE_URL}
+      # Authentication
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+      # CORS - Allow frontend container
+      - ALLOWED_ORIGINS=http://localhost:3000,http://frontend:3000
+      # OpenAI for AI Chatbot
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # Admin Configuration
+      - ADMIN_EMAILS=${ADMIN_EMAILS}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      # OAuth (optional)
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
+      - OAUTH_REDIRECT_URI=http://localhost:8000/api/auth
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - todo-network
+
+  # ---------------------------------------------------------------------------
+  # Frontend - Next.js Application
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: todo-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # Backend API URL (container networking)
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      # Authentication
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - todo-network
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  todo-network:
+    driver: bridge

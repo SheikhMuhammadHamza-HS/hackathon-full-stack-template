@@ -17,9 +17,11 @@ dependencies = [
     "authlib==1.*",             # OAuth support
     "httpx==0.*",               # HTTP client for OAuth
     "openai==1.*",              # OpenAI API client
+    "openai-agents>=0.0.3",     # OpenAI Agents SDK
     "python-dateutil==2.*",     # Date utilities for recurring tasks
     "slowapi>=0.1.9",
     "mcp>=1.0.0",
+    "itsdangerous>=2.0.0",  # Required for session middleware
     # Phase V: Dapr integration dependencies
 ]
 
