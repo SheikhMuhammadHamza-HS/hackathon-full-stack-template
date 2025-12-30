@@ -156,8 +156,8 @@ function MessageBubble({ message }: { message: Message }) {
           isUser
             ? 'bg-gradient-to-br from-purple-600 to-purple-700 text-white rounded-br-md'
             : isError
-            ? 'bg-red-500/10 border border-red-500/30 text-red-200 rounded-bl-md'
-            : 'bg-white/10 backdrop-blur-sm border border-white/10 text-gray-100 rounded-bl-md'
+              ? 'bg-red-500/10 border border-red-500/30 text-red-200 rounded-bl-md'
+              : 'bg-white/10 backdrop-blur-sm border border-white/10 text-gray-100 rounded-bl-md'
         )}
       >
         {/* Avatar and role indicator */}
@@ -842,18 +842,43 @@ export default function ChatPage() {
     setUser(currentUser);
     setIsAuthLoading(false);
 
-    // Fetch all conversations
-    fetchConversations(currentUser.user_id);
+    // Initialize chat: Fetch conversations -> Restore last session or Load latest
+    const initChat = async () => {
+      try {
+        // 1. Fetch all conversations
+        const convs = await api.get<ConversationItem[]>(`/api/${currentUser.user_id}/conversations`);
+        setConversations(convs);
 
-    // Load last conversation if exists
-    const savedConversationId = localStorage.getItem('chat_conversation_id');
-    if (savedConversationId) {
-      const convId = parseInt(savedConversationId, 10);
-      if (!isNaN(convId)) {
-        loadConversationHistory(currentUser.user_id, convId);
+        // 2. Determine which conversation to load
+        let convIdToLoad: number | null = null;
+        const savedIdStr = localStorage.getItem('chat_conversation_id');
+
+        if (savedIdStr) {
+          const savedId = parseInt(savedIdStr, 10);
+          // Only attempt to load if it exists in the user's list (avoids 404s)
+          if (!isNaN(savedId) && convs.some(c => c.id === savedId)) {
+            convIdToLoad = savedId;
+          }
+        }
+
+        // 3. Fallback: If no valid saved ID, load the most recent conversation
+        if (!convIdToLoad && convs.length > 0) {
+          convIdToLoad = convs[0].id; // Backend returns desc sorted by updated_at
+        }
+
+        // 4. Load the selected conversation
+        if (convIdToLoad) {
+          await loadConversationHistory(currentUser.user_id, convIdToLoad);
+          localStorage.setItem('chat_conversation_id', convIdToLoad.toString());
+        }
+
+      } catch (error) {
+        console.error('Failed to initialize chat:', error);
       }
-    }
-  }, [router, loadConversationHistory, fetchConversations]);
+    };
+
+    initChat();
+  }, [router, loadConversationHistory]);
 
   /**
    * Scroll to bottom when messages change
@@ -987,58 +1012,58 @@ export default function ChatPage() {
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            <span className="hidden sm:inline">New Chat</span>
-          </button>
-        </div>
-      </header>
+              </svg>
+              <span className="hidden sm:inline">New Chat</span>
+            </button>
+          </div>
+        </header>
 
-      {/* Quick Action Suggestions */}
-      <div className="flex-shrink-0 bg-white/5 border-b border-white/10">
-        <div className="max-w-4xl mx-auto">
-          <QuickActionSuggestions
-            onSuggestionClick={handleSuggestionClick}
-            disabled={isLoading}
-          />
+        {/* Quick Action Suggestions */}
+        <div className="flex-shrink-0 bg-white/5 border-b border-white/10">
+          <div className="max-w-4xl mx-auto">
+            <QuickActionSuggestions
+              onSuggestionClick={handleSuggestionClick}
+              disabled={isLoading}
+            />
+          </div>
         </div>
-      </div>
 
-      {/* Messages Area */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          {messages.length === 0 ? (
-            <EmptyState />
-          ) : (
-            <>
-              {messages.map((message) => (
-                <MessageBubble key={message.id} message={message} />
-              ))}
-              {isLoading && <TypingIndicator />}
-              <div ref={messagesEndRef} />
-            </>
-          )}
-        </div>
-      </main>
+        {/* Messages Area */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-4xl mx-auto px-4 py-6">
+            {messages.length === 0 ? (
+              <EmptyState />
+            ) : (
+              <>
+                {messages.map((message) => (
+                  <MessageBubble key={message.id} message={message} />
+                ))}
+                {isLoading && <TypingIndicator />}
+                <div ref={messagesEndRef} />
+              </>
+            )}
+          </div>
+        </main>
 
-      {/* Input Area */}
-      <footer
-        className="
+        {/* Input Area */}
+        <footer
+          className="
           flex-shrink-0
           bg-white/5 backdrop-blur-xl
           border-t border-white/10
         "
-      >
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          {/* Error message */}
-          {error && (
-            <div className="mb-3 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm">
-              {error}
-            </div>
-          )}
+        >
+          <div className="max-w-4xl mx-auto px-4 py-4">
+            {/* Error message */}
+            {error && (
+              <div className="mb-3 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm">
+                {error}
+              </div>
+            )}
 
-          {/* Input container */}
-          <div
-            className="
+            {/* Input container */}
+            <div
+              className="
               flex items-end gap-3
               bg-white/5 backdrop-blur-sm
               border border-white/10 hover:border-white/20
@@ -1046,15 +1071,15 @@ export default function ChatPage() {
               transition-all duration-200
               focus-within:border-purple-500/50 focus-within:ring-1 focus-within:ring-purple-500/25
             "
-          >
-            <textarea
-              ref={inputRef}
-              value={inputValue}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              placeholder="Type a message... (e.g., 'Add a task to buy milk')"
-              rows={1}
-              className="
+            >
+              <textarea
+                ref={inputRef}
+                value={inputValue}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                placeholder="Type a message... (e.g., 'Add a task to buy milk')"
+                rows={1}
+                className="
                 flex-1 min-h-[44px] max-h-[150px]
                 bg-transparent border-0
                 text-white placeholder-gray-500
@@ -1063,22 +1088,22 @@ export default function ChatPage() {
                 px-3 py-2
                 text-sm leading-relaxed
               "
-              disabled={isLoading}
-              aria-label="Chat message input"
-            />
-            <SendButton
-              onClick={handleSendMessage}
-              disabled={!inputValue.trim() || isLoading}
-              isLoading={isLoading}
-            />
-          </div>
+                disabled={isLoading}
+                aria-label="Chat message input"
+              />
+              <SendButton
+                onClick={handleSendMessage}
+                disabled={!inputValue.trim() || isLoading}
+                isLoading={isLoading}
+              />
+            </div>
 
-          {/* Helper text */}
-          <p className="mt-2 text-center text-xs text-gray-500">
-            Press Enter to send, Shift+Enter for new line
-          </p>
-        </div>
-      </footer>
+            {/* Helper text */}
+            <p className="mt-2 text-center text-xs text-gray-500">
+              Press Enter to send, Shift+Enter for new line
+            </p>
+          </div>
+        </footer>
       </div>
     </div>
   );
