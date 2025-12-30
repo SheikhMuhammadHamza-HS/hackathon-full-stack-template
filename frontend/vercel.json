@@ -3,11 +3,5 @@
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
-  "installCommand": "npm install",
-  "env": {
-    "NEXT_PUBLIC_API_URL": "@next_public_api_url",
-    "NEXT_PUBLIC_BETTER_AUTH_URL": "@next_public_better_auth_url",
-    "BETTER_AUTH_SECRET": "@better_auth_secret",
-    "DATABASE_URL": "@database_url"
-  }
+  "installCommand": "npm install"
 }
