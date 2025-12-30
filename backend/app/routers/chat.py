@@ -459,29 +459,58 @@ async def chat(
 
     # Get Dapr State Store instance
     state_store = get_state_store()
-    degraded_mode = False
+    
+    # ------------------------------------------------------------------------
+    # Dual-Write Strategy: SQL (Primary) + Dapr (Secondary/Cache)
+    # We prioritize SQL to ensure persistence in environments without Dapr
+    # ------------------------------------------------------------------------
 
     try:
-        # Step 2: Get or create conversation state from Dapr
-        # Convert int conversation_id to string for Dapr state key
-        conv_id_str = str(chat_request.conversation_id) if chat_request.conversation_id else None
-
-        conversation_id, state, is_new = await _get_or_create_dapr_conversation(
-            conv_id_str,
+        # Step 2: Handle Conversation ID (SQL Primary)
+        conversation_id_int = chat_request.conversation_id
+        
+        # Get or create conversation in SQL Database
+        conversation = await _get_or_create_conversation(
+            conversation_id_int,
             authenticated_user,
-            state_store
+            session
         )
+        conversation_id_int = conversation.id
+        conv_id_str = str(conversation_id_int)
+        
+        # Try to get Dapr state (Secondary)
+        # We don't fail if this fails, just proceed with empty state if needed
+        try:
+            _, state, _ = await _get_or_create_dapr_conversation(
+                conv_id_str, authenticated_user, state_store
+            )
+        except Exception as e:
+            logger.warning(f"Dapr state retrieval failed: {e}")
+            # Fallback to creating a fresh state object based on SQL ID
+            state = create_empty_conversation_state(authenticated_user, conv_id_str)
 
-        # Check if we're in degraded mode
-        if state_store.is_degraded:
-            degraded_mode = True
-            logger.warning(f"Operating in degraded mode for user {authenticated_user}")
-
-        # Step 3: Add user message to state
+        # Step 3: Save User Message (SQL + Dapr)
+        # SQL Save
+        await _save_message(
+            conversation_id=conversation_id_int,
+            user_id=authenticated_user,
+            role="user",
+            content=chat_request.message,
+            tool_calls=None,
+            session=session
+        )
+        
+        # Dapr State update
         state = add_message_to_state(state, "user", chat_request.message)
 
-        # Step 4: Get conversation history from state for agent
+        # Step 4: Get history for Agent
+        # We use state history if available (context window management), 
+        # otherwise we could fetch from SQL if Dapr state was empty/failed
         history_for_agent = _state_messages_to_history(state)
+        
+        # If Dapr state was empty (e.g. Dapr down), history might be empty
+        # In a robust system, we would fetch recent SQL messages here to repopulate context
+        # For now, we proceed.
 
         # Step 5: Process with AI agent
         reply, tool_calls = await _process_with_agent_v2(
@@ -491,58 +520,59 @@ async def chat(
             session=session
         )
 
-        # Step 6: Add assistant response to state
+        # Step 6: Save Assistant Response (SQL + Dapr)
+        # SQL Save
+        await _save_message(
+            conversation_id=conversation_id_int,
+            user_id=authenticated_user,
+            role="assistant",
+            content=reply,
+            tool_calls=tool_calls,
+            session=session
+        )
+        
+        # Commit SQL changes
+        await session.commit()
+
+        # Dapr State update
         tool_calls_dict = [
             {"tool": tc.tool, "parameters": tc.parameters, "result": tc.result}
             for tc in tool_calls
         ] if tool_calls else None
         state = add_message_to_state(state, "assistant", reply, tool_calls_dict)
 
-        # Step 7: Save updated state to Dapr (fire-and-forget pattern)
-        save_success = await _save_dapr_state(
-            authenticated_user,
-            conversation_id,
-            state,
-            state_store
-        )
-        if not save_success:
-            logger.warning(f"Failed to save state for conversation {conversation_id}")
-            degraded_mode = True
+        # Step 7: Save updated state to Dapr (fire-and-forget / best effort)
+        try:
+            await _save_dapr_state(
+                authenticated_user,
+                conv_id_str,
+                state,
+                state_store
+            )
+        except Exception as e:
+            logger.warning(f"Failed to save state to Dapr: {e}")
+            # We don't care deeply because SQL is our source of truth now
 
         # Step 8: Build and return response
-        # Note: conversation_id is now a string (Dapr state key component)
-        # For backward compatibility, we try to convert to int or use hash
-        try:
-            conv_id_response = int(conversation_id)
-        except ValueError:
-            # Use hash of string ID for backward compatibility with int response
-            conv_id_response = abs(hash(conversation_id)) % (10**9)
-
         timestamp = datetime.utcnow()
 
-        # Add degraded mode warning to reply if applicable
-        final_reply = reply
-        if degraded_mode:
-            final_reply = f"[Note: Chat history may not persist due to service issues]\n\n{reply}"
-
         return ChatResponse(
-            reply=final_reply,
-            conversation_id=conv_id_response,
+            reply=reply,
+            conversation_id=conversation_id_int,
             tool_calls=tool_calls,
             timestamp=timestamp
         )
 
     except HTTPException:
-        # Re-raise HTTP exceptions (400, 403, 404)
         raise
     except Exception as e:
-        # Log error server-side, return generic message
         import traceback
-        logger.error(f"Error processing chat for user {authenticated_user}: {e}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.error(f"Error processing chat: {e}")
+        logger.error(traceback.format_exc())
+        await session.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred processing your message. Please try again."
+            detail="An error occurred processing your message."
         )
 
 
