@@ -51,20 +51,13 @@ async def run_agent(
     # Create agent
     agent = create_todo_agent()
 
-    # Build conversation context from history
-    messages = []
-    for msg in conversation_history:
-        messages.append(f"{msg['role']}: {msg['content']}")
-
-    # Combine history with current message
-    if messages:
-        full_message = "\n".join(messages) + f"\nuser: {user_message}"
-    else:
-        full_message = user_message
-
-    # Run agent using Agents SDK Runner
-    # Syntax: Runner.run(agent, message, context=context)
-    result = await Runner.run(agent, full_message, context=context)
+    # The conversation_history already contains the latest user message (added in chat.py)
+    # We should use the user_message as the primary input for the Runner,
+    # and use the previous messages as context.
+    
+    # Run agent using OpenAI Agents SDK Runner
+    # If history is provided, we pass it as the context/previous messages
+    result = await Runner.run(agent, user_message, context=context)
 
     # Extract tool calls from result
     tool_calls = []
