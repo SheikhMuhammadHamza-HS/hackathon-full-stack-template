@@ -20,8 +20,8 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       # Authentication
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
-      # CORS - Allow frontend container
-      - ALLOWED_ORIGINS=http://localhost:3000,http://frontend:3000
+      # CORS - Allow both local and production URLs
+      - ALLOWED_ORIGINS=http://localhost:3000,http://frontend:3000,${FRONTEND_URL:-}
       # OpenAI for AI Chatbot
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       # Admin Configuration
@@ -33,7 +33,7 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
-      - OAUTH_REDIRECT_URI=http://localhost:8000/api/auth
+      - OAUTH_REDIRECT_URI=${BACKEND_URL:-http://localhost:8000}/api/auth
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -55,8 +55,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Backend API URL (container networking)
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      # Backend API URL (Use Render URL if available, fallback to localhost)
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
       # Authentication
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
     depends_on:

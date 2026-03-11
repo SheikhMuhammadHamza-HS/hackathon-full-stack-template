@@ -258,19 +258,24 @@ async def _save_dapr_state(
     return await state_store.save_state(state_key, state)
 
 
-def _state_messages_to_history(state: Dict[str, Any]) -> List[Dict[str, str]]:
+def _state_messages_to_history(state: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Convert state messages to agent history format.
+    Includes tool calls if present to preserve agent context.
 
     Args:
         state: Conversation state with messages
 
     Returns:
-        List of {role, content} dicts for agent
+        List of {role, content, tool_calls} dicts for agent
     """
     messages = get_recent_messages(state)
     return [
-        {"role": msg["role"], "content": msg["content"]}
+        {
+            "role": msg["role"],
+            "content": msg["content"],
+            "tool_calls": msg.get("tool_calls")
+        }
         for msg in messages
     ]
 
@@ -459,7 +464,8 @@ async def chat(
 
     # Get Dapr State Store instance
     state_store = get_state_store()
-    
+    is_degraded = False
+
     # ------------------------------------------------------------------------
     # Dual-Write Strategy: SQL (Primary) + Dapr (Secondary/Cache)
     # We prioritize SQL to ensure persistence in environments without Dapr
@@ -481,13 +487,53 @@ async def chat(
         # Try to get Dapr state (Secondary)
         # We don't fail if this fails, just proceed with empty state if needed
         try:
-            _, state, _ = await _get_or_create_dapr_conversation(
+            _, state, is_new_dapr = await _get_or_create_dapr_conversation(
                 conv_id_str, authenticated_user, state_store
             )
+
+            # Lazy-Sync: If Dapr state is new but SQL conversation existed, re-sync messages
+            # This handles Dapr restarts or state loss after eviction
+            if is_new_dapr and chat_request.conversation_id is not None:
+                logger.info(f"Dapr state miss for existing conversation {conv_id_str}, performing lazy-sync from SQL")
+                history_from_sql = await _fetch_conversation_history(
+                    conversation_id_int, authenticated_user, session, limit=100
+                )
+                
+                if history_from_sql:
+                    # Clear current empty state messages (if any) and populate from SQL
+                    state["messages"] = []
+                    for hmsg in history_from_sql:
+                        tc_dict = None
+                        if hmsg.tool_calls:
+                            try:
+                                tc_dict = json.loads(hmsg.tool_calls)
+                            except:
+                                logger.warning(f"Failed to parse tool_calls in sync for msg {hmsg.id}")
+                        
+                        state = add_message_to_state(
+                            state, 
+                            hmsg.role, 
+                            hmsg.content, 
+                            tc_dict
+                        )
+                    logger.info(f"Re-synced {len(history_from_sql)} messages from SQL to Dapr")
         except Exception as e:
             logger.warning(f"Dapr state retrieval failed: {e}")
-            # Fallback to creating a fresh state object based on SQL ID
+            is_degraded = True
+            # Fallback to SQL history immediately if Dapr fails
+            history_from_sql = await _fetch_conversation_history(
+                conversation_id_int, authenticated_user, session, limit=100
+            )
             state = create_empty_conversation_state(authenticated_user, conv_id_str)
+            if history_from_sql:
+                for hmsg in history_from_sql:
+                    tc_dict = None
+                    if hmsg.tool_calls:
+                        try:
+                            tc_dict = json.loads(hmsg.tool_calls)
+                        except: pass
+                    state = add_message_to_state(state, hmsg.role, hmsg.content, tc_dict)
+                logger.info(f"Fallback: Resynced {len(history_from_sql)} messages from SQL due to Dapr failure")
 
         # Step 3: Save User Message (SQL + Dapr)
         # SQL Save
@@ -506,11 +552,22 @@ async def chat(
         # Step 4: Get history for Agent
         # We use state history if available (context window management), 
         # otherwise we could fetch from SQL if Dapr state was empty/failed
+        # If Dapr state was empty (even if not degraded), try one last SQL fetch to ensure context
+        if not state.get("messages") or len(state["messages"]) <= 1: # only current user msg or empty
+            history_from_sql = await _fetch_conversation_history(
+                conversation_id_int, authenticated_user, session, limit=10
+            )
+            if history_from_sql:
+                # Merge or replace (prefer SQL if Dapr was empty)
+                state["messages"] = []
+                for hmsg in history_from_sql:
+                    tc_dict = json.loads(hmsg.tool_calls) if hmsg.tool_calls else None
+                    state = add_message_to_state(state, hmsg.role, hmsg.content, tc_dict)
+                # Re-add current message if it was lost
+                if chat_request.message not in [m["content"] for m in state["messages"]]:
+                    state = add_message_to_state(state, "user", chat_request.message)
+
         history_for_agent = _state_messages_to_history(state)
-        
-        # If Dapr state was empty (e.g. Dapr down), history might be empty
-        # In a robust system, we would fetch recent SQL messages here to repopulate context
-        # For now, we proceed.
 
         # Step 5: Process with AI agent
         reply, tool_calls = await _process_with_agent_v2(
@@ -560,7 +617,8 @@ async def chat(
             reply=reply,
             conversation_id=conversation_id_int,
             tool_calls=tool_calls,
-            timestamp=timestamp
+            timestamp=timestamp,
+            is_degraded=is_degraded
         )
 
     except HTTPException:

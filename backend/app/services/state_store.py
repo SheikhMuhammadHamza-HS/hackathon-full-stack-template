@@ -48,9 +48,10 @@ class DaprStateStore:
         self._client: Optional[httpx.AsyncClient] = None
 
     async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create async HTTP client."""
+        """Get or create async HTTP client with low timeout for Dapr responsiveness."""
         if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=10.0)
+            # Low timeout because Dapr sidecar should be on localhost
+            self._client = httpx.AsyncClient(timeout=2.0)
         return self._client
 
     async def close(self):

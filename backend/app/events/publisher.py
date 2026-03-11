@@ -43,9 +43,10 @@ class EventPublisher:
         self._client: Optional[httpx.AsyncClient] = None
 
     async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create async HTTP client."""
+        """Get or create async HTTP client with low timeout for Dapr responsiveness."""
         if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=5.0)
+            # Sidecar is local, should be very fast or fail fast
+            self._client = httpx.AsyncClient(timeout=1.0)
         return self._client
 
     async def close(self):

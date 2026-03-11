@@ -259,6 +259,7 @@ class ChatResponse(BaseModel):
     conversation_id: int
     tool_calls: List[ToolCallInfo] = []
     timestamp: datetime
+    is_degraded: bool = False  # True if state store is unavailable
 
     class Config:
         from_attributes = True

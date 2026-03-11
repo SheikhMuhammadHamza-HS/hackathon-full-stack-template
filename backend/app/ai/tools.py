@@ -12,6 +12,7 @@ from agents import function_tool, RunContextWrapper
 from dataclasses import dataclass
 
 from app.models import Task
+from app.events.publisher import publish_event
 
 
 # Context dataclass for passing user_id and db session to tools
@@ -78,6 +79,23 @@ async def add_task(
         session.add(task)
         await session.commit()
         await session.refresh(task)
+
+        # Publish task.created event (fire-and-forget)
+        await publish_event(
+            topic="tasks",
+            event_type="task.created",
+            data={
+                "task_id": task.id,
+                "title": task.title,
+                "description": task.description,
+                "priority": task.priority,
+                "tags": json.loads(task.tags) if task.tags else [],
+                "due_date": task.due_date.isoformat() if task.due_date else None,
+                "is_recurring": task.is_recurring,
+                "recurring_interval": task.recurring_interval
+            },
+            user_id=user_id
+        )
 
         result = {
             "success": True,
@@ -190,6 +208,21 @@ async def complete_task(
         await session.commit()
         await session.refresh(task)
 
+        # Publish task.completed event (fire-and-forget)
+        # This event triggers recurring task generation if applicable
+        await publish_event(
+            topic="tasks",
+            event_type="task.completed",
+            data={
+                "task_id": task.id,
+                "completed": task.completed,
+                "is_recurring": task.is_recurring,
+                "recurring_interval": task.recurring_interval,
+                "due_date": task.due_date.isoformat() if task.due_date else None
+            },
+            user_id=user_id
+        )
+
         response = {
             "success": True,
             "task": {
@@ -242,6 +275,14 @@ async def delete_task(
         task_num = task.task_number
         await session.delete(task)
         await session.commit()
+
+        # Publish task.deleted event (fire-and-forget)
+        await publish_event(
+            topic="tasks",
+            event_type="task.deleted",
+            data={"task_id": task.id},
+            user_id=user_id
+        )
 
         response = {
             "success": True,
@@ -316,6 +357,19 @@ async def update_task(
         session.add(task)
         await session.commit()
         await session.refresh(task)
+
+        # Publish task.updated event (fire-and-forget)
+        await publish_event(
+            topic="tasks",
+            event_type="task.updated",
+            data={
+                "task_id": task.id,
+                "changed_fields": ["title", "description"], # Simple approximation
+                "priority": task.priority,
+                "due_date": task.due_date.isoformat() if task.due_date else None
+            },
+            user_id=user_id
+        )
 
         response = {
             "success": True,

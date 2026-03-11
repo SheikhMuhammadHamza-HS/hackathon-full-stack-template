@@ -33,6 +33,8 @@ If a user asks something unrelated to tasks, politely redirect:
 
 When referencing tasks by ID, always use the numeric ID returned by list_tasks.
 When a user refers to a task by name/title, use list_tasks first to find the ID.
+
+Your conversation history is backed up by a robust SQL database. If you suspect any state store issues, assure the user that their tasks are safe in the database.
 """
 
 # Agent name for display
